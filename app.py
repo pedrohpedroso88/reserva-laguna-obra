@@ -4,8 +4,8 @@ import plotly.express as px
 import os
 import io
 
-# Configuração da página
-st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
+# Configuração da página (Ajustado para wide, ideal para monitores e responsivo para menores)
+st.set_page_config(page_title="Gestão de Obra - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
 
 st.title("🏗️ Sistema de Obra - Reserva Laguna (Lote 16 QC)")
 st.markdown("---")
@@ -116,15 +116,14 @@ df["Etapa"] = df["CC"].map(ETAPAS)
 if menu == "📊 Dashboard & Orçamento":
     orc_total_previsto = st.session_state.orcamentos["Orçamento Previsto"].sum()
     total_geral = df['Valor Total'].sum()
-    total_pago = df['Valor Pago'].sum()
     total_pendente = df['Saldo a Pagar'].sum()
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Ajustado para 4 colunas (removido Total Pago e otimizado para não espremer em notebooks de 15")
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Orçamento Previsto", fmt_brl(orc_total_previsto))
     col2.metric("Custo Real", fmt_brl(total_geral))
-    col3.metric("Total Pago", fmt_brl(total_pago))
-    col4.metric("Saldo a Pagar", fmt_brl(total_pendente))
-    col5.metric("Lançamentos", len(df))
+    col3.metric("Saldo a Pagar", fmt_brl(total_pendente))
+    col4.metric("Lançamentos", len(df))
 
     st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
@@ -137,7 +136,6 @@ if menu == "📊 Dashboard & Orçamento":
     resumo_orcamento.rename(columns={"Valor Total": "Custo Real"}, inplace=True)
     resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Custo Real"]
 
-    # Tabela sem a coluna Saldo a Pagar, focada estritamente no Orçamento vs Custo Real
     orc_editado = st.data_editor(
         resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]],
         num_rows="fixed",
@@ -157,6 +155,7 @@ if menu == "📊 Dashboard & Orçamento":
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
     
+    # Layout responsivo: em telas menores (notebooks), os gráficos quebram para baixo automaticamente sem cortar
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
         fig_bar = px.bar(
@@ -167,7 +166,7 @@ if menu == "📊 Dashboard & Orçamento":
             title="Comparativo: Orçamento vs. Custo Real",
             labels={"value": "Valor (R$)", "variable": "Métrica"}
         )
-        fig_bar.update_layout(xaxis_tickangle=-45)
+        fig_bar.update_layout(xaxis_tickangle=-45, margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_bar, use_container_width=True)
         
     with c_graf2:
@@ -178,6 +177,7 @@ if menu == "📊 Dashboard & Orçamento":
             title="Distribuição do Custo Real por Etapa", 
             hole=0.4
         )
+        fig_pie.update_layout(margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_pie, use_container_width=True)
 
 # TELA 2: LANÇAR DESPESA
@@ -212,11 +212,14 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
+# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO (Com a coluna Saldo a Pagar de volta)
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Edite células diretamente na tabela ou remova um registro específico logo abaixo.")
+    st.info("💡 **Dica:** Edite células diretamente na tabela (incluindo o Saldo a Pagar) ou remova um registro específico logo abaixo.")
     
+    # Recalcula a coluna Saldo a Pagar para garantir exibição correta na tabela editável
+    st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
+
     df_editado = st.data_editor(
         st.session_state.despesas,
         num_rows="dynamic",
@@ -224,12 +227,14 @@ elif menu == "📋 Extrato & Edição de Notas":
         key="editor_despesas",
         column_config={
             "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f"),
-            "Valor Pago": st.column_config.NumberColumn("Valor Pago (R$)", format="R$ %.2f")
+            "Valor Pago": st.column_config.NumberColumn("Valor Pago (R$)", format="R$ %.2f"),
+            "Saldo a Pagar": st.column_config.NumberColumn("Saldo a Pagar (R$)", format="R$ %.2f")
         }
     )
     
     if not df_editado.equals(st.session_state.despesas):
         st.session_state.despesas = df_editado
+        st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
         st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
 
@@ -293,7 +298,7 @@ elif menu == "💾 Central de Backup Geral":
         data=backup_data,
         file_name="backup_completo_reserva_laguna.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
+        use_container_width=True,
     )
     
     st.info("💡 **Dica de Segurança:** Este arquivo consolida orçamentos, custos reais e diário de campo em planilhas oficiais com abas.")
