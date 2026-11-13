@@ -37,6 +37,7 @@ ETAPAS = {
 
 ARQUIVO_DADOS = "dados_obra.csv"
 ARQUIVO_DIARIO = "diario_obra.csv"
+ARQUIVO_ORCAMENTO = "orcamento_etapas.csv"
 
 def fmt_brl(valor):
     try:
@@ -44,7 +45,17 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Carregamento seguro dos dados com validação de colunas
+# Inicializa ou carrega os Orçamentos por Etapa (Baseado na solicitação do gestor)
+if "orcamentos" not in st.session_state:
+    if os.path.exists(ARQUIVO_ORCAMENTO):
+        st.session_state.orcamentos = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
+    else:
+        # Orçamento inicial sugerido para cada etapa (você pode editar direto no app)
+        orc_inicial = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
+        st.session_state.orcamentos = pd.DataFrame(orc_inicial)
+        st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
+
+# Carregamento seguro das despesas
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         try:
@@ -53,7 +64,6 @@ if "despesas" not in st.session_state:
                 raise ValueError("Colunas ausentes")
             st.session_state.despesas = df_temp
         except:
-            # Se o arquivo antigo estiver corrompido, recria do zero
             os.remove(ARQUIVO_DADOS)
             st.rerun()
     else:
@@ -89,14 +99,13 @@ if "diario" not in st.session_state:
 
 # Menu Lateral
 menu = st.sidebar.radio("Navegação do Sistema", [
-    "📊 Dashboard & Etapas",
+    "📊 Dashboard & Orçamento",
     "➕ Lançar Nova Despesa",
     "📋 Extrato & Edição de Notas",
     "👷 Diário de Obra (Gestão)",
     "💾 Central de Backup Geral"
 ])
 
-# Garante conversão numérica correta para evitar erros
 st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
 st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
 
@@ -104,32 +113,76 @@ df = st.session_state.despesas.copy()
 df["Saldo a Pagar"] = df["Valor Total"] - df["Valor Pago"]
 df["Etapa"] = df["CC"].map(ETAPAS)
 
-# TELA 1: DASHBOARD
-if menu == "📊 Dashboard & Etapas":
+# TELA 1: DASHBOARD & ORÇAMENTO
+if menu == "📊 Dashboard & Orçamento":
     total_geral = df['Valor Total'].sum()
     total_pago = df['Valor Pago'].sum()
     total_pendente = df['Saldo a Pagar'].sum()
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Custo Total Lançado", fmt_brl(total_geral))
+    col1.metric("Custo Total Realizado", fmt_brl(total_geral))
     col2.metric("Total Pago", fmt_brl(total_pago))
     col3.metric("Saldo a Pagar", fmt_brl(total_pendente))
     col4.metric("Lançamentos", len(df))
 
-    st.subheader("Resumo por Centro de Custo / Etapa")
-    resumo_etapas = df.groupby(["CC", "Etapa"])[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
+    st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Realizado)")
+    st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto diretamente na tabela abaixo!")
+
+    # Agrupa os gastos reais por centro de custo
+    gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
-    resumo_exibicao = resumo_etapas.copy()
-    resumo_exibicao["Valor Total"] = resumo_exibicao["Valor Total"].apply(fmt_brl)
-    resumo_exibicao["Valor Pago"] = resumo_exibicao["Valor Pago"].apply(fmt_brl)
-    resumo_exibicao["Saldo a Pagar"] = resumo_exibicao["Saldo a Pagar"].apply(fmt_brl)
+    # Junta com a tabela de orçamento
+    orc_df = st.session_state.orcamentos.copy()
+    resumo_orcamento = pd.merge(orc_df, gastos_reais, on="CC", how="left").fillna(0.0)
+    resumo_orcamento.rename(columns={"Valor Total": "Gasto Real"}, inplace=True)
+    resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Gasto Real"]
+
+    # Tabela editável para o gestor atualizar o orçamento previsto se desejar
+    orc_editado = st.data_editor(
+        resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Gasto Real", "Saldo a Pagar", "Saldo do Orçamento"]],
+        num_rows="fixed",
+        use_container_width=True,
+        key="editor_orcamento",
+        column_config={
+            "Orçamento Previsto": st.column_config.NumberColumn("Orçamento Previsto (R$)", format="R$ %.2f"),
+            "Gasto Real": st.column_config.NumberColumn("Gasto Real (R$)", format="R$ %.2f", disabled=True),
+            "Saldo a Pagar": st.column_config.NumberColumn("Saldo a Pagar (R$)", format="R$ %.2f", disabled=True),
+            "Saldo do Orçamento": st.column_config.NumberColumn("Saldo do Orçamento (R$)", format="R$ %.2f", disabled=True),
+        }
+    )
+
+    # Salva alteração do orçamento caso o gestor edite
+    if not orc_editado[["CC", "Etapa", "Orçamento Previsto"]].equals(st.session_state.orcamentos):
+        st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
+        st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
+
+    st.markdown("---")
+    st.subheader("📈 Gráficos Comparativos de Custos")
     
-    c1, c2 = st.columns([1.2, 1])
-    with c1:
-        st.dataframe(resumo_exibicao, use_container_width=True, hide_index=True)
-    with c2:
-        fig = px.pie(resumo_etapas, values="Valor Total", names="Etapa", title="Distribuição de Custos", hole=0.4)
-        st.plotly_chart(fig, use_container_width=True)
+    c_graf1, c_graf2 = st.columns(2)
+    with c_graf1:
+        # Gráfico de Barras: Orçamento Previsto vs Gasto Real
+        fig_bar = px.bar(
+            resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
+            x="Etapa", 
+            y=["Orçamento Previsto", "Gasto Real"], 
+            barmode="group",
+            title="Comparativo: Orçamento vs. Gasto Real",
+            labels={"value": "Valor (R$)", "variable": "Métrica"}
+        )
+        fig_bar.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig_bar, use_container_width=True)
+        
+    with c_graf2:
+        # Gráfico de Pizza: Distribuição dos Gastos Reais
+        fig_pie = px.pie(
+            resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
+            values="Gasto Real", 
+            names="Etapa", 
+            title="Distribuição dos Gastos Reais por Etapa", 
+            hole=0.4
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
 
 # TELA 2: LANÇAR DESPESA
 elif menu == "➕ Lançar Nova Despesa":
@@ -223,16 +276,18 @@ elif menu == "👷 Diário de Obra (Gestão)":
 # TELA 5: CENTRAL DE BACKUP GERAL
 elif menu == "💾 Central de Backup Geral":
     st.subheader("Central de Backup e Cópia de Segurança Completa")
-    st.markdown("Aqui você pode baixar o arquivo de backup unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba, compatível com qualquer versão do Excel.")
+    st.markdown("Aqui você pode baixar o arquivo de backup unificado contendo **o orçamento**, **as despesas** e **o Diário de Obra** em abas separadas.")
     
     df_despesas_exp = st.session_state.despesas.copy()
     df_despesas_exp["Etapa"] = df_despesas_exp["CC"].map(ETAPAS)
     df_despesas_exp["Saldo a Pagar"] = df_despesas_exp["Valor Total"] - df_despesas_exp["Valor Pago"]
     
+    df_orc_exp = st.session_state.orcamentos.copy()
     df_diario_exp = st.session_state.diario.copy()
     
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_orc_exp.to_excel(writer, index=False, sheet_name='Orcamento por Etapa')
         df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
         df_diario_exp.to_excel(writer, index=False, sheet_name='Diario de Obra (RDO)')
     backup_data = output.getvalue()
@@ -245,4 +300,4 @@ elif menu == "💾 Central de Backup Geral":
         use_container_width=True
     )
     
-    st.info("💡 **Dica de Segurança:** Este arquivo consolida 100% dos dados da sua obra (despesas e diário de campo) em um formato de planilha oficial com múltiplas abas.")
+    st.info("💡 **Dica de Segurança:** Este arquivo consolida orçamentos, custos reais e diário de campo em planilhas oficiais com abas.")
