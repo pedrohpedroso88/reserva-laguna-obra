@@ -7,10 +7,9 @@ import io
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
 
-st.title("🏗️ Sistema de Gestão de Obras - Reserva Laguna (Lote 16 QC)")
+st.title("🏗️ Sistema de Obra - Reserva Laguna (Lote 16 QC)")
 st.markdown("---")
 
-# Centros de Custo baseados na planilha oficial
 ETAPAS = {
     0: "0 - ORÇAMENTOS E PROJETOS",
     1: "1 - SERVIÇOS PRELIMINARES",
@@ -39,7 +38,7 @@ ETAPAS = {
 ARQUIVO_DADOS = "dados_obra.csv"
 ARQUIVO_DIARIO = "diario_obra.csv"
 
-# Inicializa ou carrega os dados de despesas persistentes
+# Carregamento seguro dos dados
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         st.session_state.despesas = pd.read_csv(ARQUIVO_DADOS)
@@ -70,34 +69,14 @@ if "diario" not in st.session_state:
         ])
         st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
 
-# Menu Lateral do Sistema
+# Menu Lateral
 menu = st.sidebar.radio("Navegação do Sistema", [
     "📊 Dashboard & Etapas",
     "➕ Lançar Nova Despesa",
     "📋 Extrato & Edição de Notas",
-    "👷 Diário de Obra (Gestão)"
+    "👷 Diário de Obra (Gestão)",
+    "💾 Central de Backup Geral"
 ])
-
-# Seção de Backup e Exportação no Menu Lateral
-st.sidebar.markdown("---")
-st.sidebar.subheader("💾 Segurança & Backup")
-
-df_export = st.session_state.despesas.copy()
-df_export["Etapa"] = df_export["CC"].map(ETAPAS)
-df_export["Saldo a Pagar"] = df_export["Valor Total"] - df_export["Valor Pago"]
-
-# Geração correta e limpa do Excel sem travar permissões
-output = io.BytesIO()
-with pd.ExcelWriter(output, engine='openpyxl') as writer:
-    df_export.to_excel(writer, index=False, sheet_name='Extrato')
-excel_data = output.getvalue()
-
-st.sidebar.download_button(
-    label="📥 Baixar Planilha (Excel)",
-    data=excel_data,
-    file_name="reserva_laguna_lote16.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
 
 df = st.session_state.despesas.copy()
 df["Saldo a Pagar"] = df["Valor Total"] - df["Valor Pago"]
@@ -135,7 +114,7 @@ elif menu == "➕ Lançar Nova Despesa":
         
         col3, col4 = st.columns(2)
         data_input = col3.date_input("Data da Despesa")
-        data_str = data_input.strftime("%d/%m/%Y") # Padrão brasileiro DD/MM/AAAA
+        data_str = data_input.strftime("%d/%m/%Y")
         cc_selecionado = col4.selectbox("Centro de Custo / Etapa *", options=list(ETAPAS.keys()), format_func=lambda x: ETAPAS[x])
         
         descricao = st.text_input("Descrição da Despesa *")
@@ -160,9 +139,8 @@ elif menu == "➕ Lançar Nova Despesa":
 # TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Você pode editar diretamente na tabela abaixo ou selecionar uma linha para exclusão rápida no botão dedicado.")
+    st.info("💡 **Dica:** Edite células diretamente na tabela ou remova um registro específico logo abaixo.")
     
-    # Tabela editável
     df_editado = st.data_editor(
         st.session_state.despesas,
         num_rows="dynamic",
@@ -179,13 +157,13 @@ elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("🗑️ Excluir Lançamento Específico")
     if len(st.session_state.despesas) > 0:
         opcoes_exclusao = [f"#{i} - {row['Fornecedor']} (R$ {row['Valor Total']}) - {row['Data']}" for i, row in st.session_state.despesas.iterrows()]
-        selecionado_para_excluir = st.selectbox("Escolha o lançamento que deseja remover:", options=opcoes_exclusao)
+        selecionado_para_excluir = st.selectbox("Escolha o lançamento para remover:", options=opcoes_exclusao)
         
         if st.button("❌ Excluir Lançamento Selecionado", type="primary"):
             indice_para_remover = int(selecionado_para_excluir.split(" ")[0].replace("#", ""))
             st.session_state.despesas = st.session_state.despesas.drop(indice_para_remover).reset_index(drop=True)
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
-            st.success("Lançamento excluído com sucesso! Atualize a página se necessário.")
+            st.success("Lançamento excluído com sucesso!")
             st.rerun()
 
 # TELA 4: DIÁRIO DE OBRA
@@ -207,6 +185,35 @@ elif menu == "👷 Diário de Obra (Gestão)":
             novo_rdo = pd.DataFrame([{"Data": data_rdo_str, "Etapa": etapa_rdo, "Responsável": resp, "Clima": clima, "Equipe": qtd_equipe, "Ocorrências": ocorrencias}])
             st.session_state.diario = pd.concat([st.session_state.diario, novo_rdo], ignore_index=True)
             st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
-            st.success("Diário registrado e salvo com sucesso!")
+            st.success("Diário registrado com sucesso!")
             
     st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
+
+# TELA 5: CENTRAL DE BACKUP GERAL
+elif menu == "💾 Central de Backup Geral":
+    st.subheader("Central de Backup e Cópia de Segurança Completa")
+    st.markdown("Aqui você pode baixar um arquivo Excel oficial unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba.")
+    
+    # Prepara os dados para exportação dupla limpa
+    df_despesas_exp = st.session_state.despesas.copy()
+    df_despesas_exp["Etapa"] = df_despesas_exp["CC"].map(ETAPAS)
+    df_despesas_exp["Saldo a Pagar"] = df_despesas_exp["Valor Total"] - df_despesas_exp["Valor Pago"]
+    
+    df_diario_exp = st.session_state.diario.copy()
+    
+    # Cria arquivo Excel com múltiplas abas limpas
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
+        df_diario_exp.to_excel(writer, index=False, sheet_name='Diario de Obra (RDO)')
+    backup_data = output.getvalue()
+    
+    st.download_button(
+        label="📥 Baixar Backup Geral da Obra (Excel com Abas)",
+        data=backup_data,
+        file_name="backup_completo_reserva_laguna.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+    
+    st.info("💡 **Dica de Segurança:** Salve este arquivo no seu computador ou no Google Drive semanalmente. Ele garante que absolutamente nenhum dado da obra (nem custos, nem diário de campo) seja perdido em hipótese alguma.")
