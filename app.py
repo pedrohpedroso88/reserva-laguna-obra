@@ -45,12 +45,11 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa (Baseado na solicitação do gestor)
+# Inicializa ou carrega os Orçamentos por Etapa
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
         st.session_state.orcamentos = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
     else:
-        # Orçamento inicial sugerido para cada etapa (você pode editar direto no app)
         orc_inicial = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
@@ -115,29 +114,31 @@ df["Etapa"] = df["CC"].map(ETAPAS)
 
 # TELA 1: DASHBOARD & ORÇAMENTO
 if menu == "📊 Dashboard & Orçamento":
+    # Calcula os totais gerais
+    orc_total_previsto = st.session_state.orcamentos["Orçamento Previsto"].sum()
     total_geral = df['Valor Total'].sum()
     total_pago = df['Valor Pago'].sum()
     total_pendente = df['Saldo a Pagar'].sum()
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Custo Total Realizado", fmt_brl(total_geral))
-    col2.metric("Total Pago", fmt_brl(total_pago))
-    col3.metric("Saldo a Pagar", fmt_brl(total_pendente))
-    col4.metric("Lançamentos", len(df))
+    # 5 Métricas no Topo (Incluindo Orçamento Previsto Total)
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Orçamento Previsto", fmt_brl(orc_total_previsto))
+    col2.metric("Custo Realizado", fmt_brl(total_geral))
+    col3.metric("Total Pago", fmt_brl(total_pago))
+    col4.metric("Saldo a Pagar", fmt_brl(total_pendente))
+    col5.metric("Lançamentos", len(df))
 
+    st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Realizado)")
     st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto diretamente na tabela abaixo!")
 
-    # Agrupa os gastos reais por centro de custo
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
-    # Junta com a tabela de orçamento
     orc_df = st.session_state.orcamentos.copy()
     resumo_orcamento = pd.merge(orc_df, gastos_reais, on="CC", how="left").fillna(0.0)
     resumo_orcamento.rename(columns={"Valor Total": "Gasto Real"}, inplace=True)
     resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Gasto Real"]
 
-    # Tabela editável para o gestor atualizar o orçamento previsto se desejar
     orc_editado = st.data_editor(
         resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Gasto Real", "Saldo a Pagar", "Saldo do Orçamento"]],
         num_rows="fixed",
@@ -151,7 +152,6 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    # Salva alteração do orçamento caso o gestor edite
     if not orc_editado[["CC", "Etapa", "Orçamento Previsto"]].equals(st.session_state.orcamentos):
         st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
@@ -161,7 +161,6 @@ if menu == "📊 Dashboard & Orçamento":
     
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
-        # Gráfico de Barras: Orçamento Previsto vs Gasto Real
         fig_bar = px.bar(
             resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
             x="Etapa", 
@@ -174,7 +173,6 @@ if menu == "📊 Dashboard & Orçamento":
         st.plotly_chart(fig_bar, use_container_width=True)
         
     with c_graf2:
-        # Gráfico de Pizza: Distribuição dos Gastos Reais
         fig_pie = px.pie(
             resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
             values="Gasto Real", 
