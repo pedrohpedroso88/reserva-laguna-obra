@@ -39,12 +39,23 @@ ARQUIVO_DADOS = "dados_obra.csv"
 ARQUIVO_DIARIO = "diario_obra.csv"
 
 def fmt_brl(valor):
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    try:
+        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return f"R$ {valor}"
 
-# Carregamento seguro dos dados
+# Carregamento seguro dos dados com validação de colunas
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
-        st.session_state.despesas = pd.read_csv(ARQUIVO_DADOS, sep=';')
+        try:
+            df_temp = pd.read_csv(ARQUIVO_DADOS, sep=';')
+            if "Valor Total" not in df_temp.columns or "Valor Pago" not in df_temp.columns:
+                raise ValueError("Colunas ausentes")
+            st.session_state.despesas = df_temp
+        except:
+            # Se o arquivo antigo estiver corrompido, recria do zero
+            os.remove(ARQUIVO_DADOS)
+            st.rerun()
     else:
         dados_iniciais = [
             {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "21/10/2025", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
@@ -65,7 +76,11 @@ if "despesas" not in st.session_state:
 
 if "diario" not in st.session_state:
     if os.path.exists(ARQUIVO_DIARIO):
-        st.session_state.diario = pd.read_csv(ARQUIVO_DIARIO, sep=';')
+        try:
+            st.session_state.diario = pd.read_csv(ARQUIVO_DIARIO, sep=';')
+        except:
+            os.remove(ARQUIVO_DIARIO)
+            st.rerun()
     else:
         st.session_state.diario = pd.DataFrame([
             {"Data": "10/09/2026", "Etapa": "19 - TAXAS ADM. / IMPOSTOS / ENCARGOS", "Responsável": "Eng. Responsável", "Clima": "Sol", "Equipe": 2, "Ocorrências": "Alvará de construção emitido pela Prefeitura de Nova Lima."}
@@ -80,6 +95,10 @@ menu = st.sidebar.radio("Navegação do Sistema", [
     "👷 Diário de Obra (Gestão)",
     "💾 Central de Backup Geral"
 ])
+
+# Garante conversão numérica correta para evitar erros
+st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
+st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
 
 df = st.session_state.despesas.copy()
 df["Saldo a Pagar"] = df["Valor Total"] - df["Valor Pago"]
@@ -201,7 +220,7 @@ elif menu == "👷 Diário de Obra (Gestão)":
             
     st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
 
-# TELA 5: CENTRAL DE BACKUP GERAL (Formato Excel Nativo Otimizado)
+# TELA 5: CENTRAL DE BACKUP GERAL
 elif menu == "💾 Central de Backup Geral":
     st.subheader("Central de Backup e Cópia de Segurança Completa")
     st.markdown("Aqui você pode baixar o arquivo de backup unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba, compatível com qualquer versão do Excel.")
