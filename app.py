@@ -45,11 +45,10 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa (BLINDADO contra linhas fantasmas de Total)
+# Inicializa ou carrega os Orçamentos por Etapa
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
         df_orc_temp = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
-        # Remove qualquer linha fantasma de total gravada anteriormente (CC 999 ou texto "TOTAL")
         df_orc_temp = df_orc_temp[df_orc_temp["CC"].astype(str) != "999"]
         df_orc_temp = df_orc_temp[~df_orc_temp["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
         st.session_state.orcamentos = df_orc_temp.reset_index(drop=True)
@@ -130,7 +129,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
-    st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. Você pode adicionar novas linhas ou excluir linhas indesejadas utilizando a própria tabela interativa.")
+    st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. O total geral da obra é exibido logo abaixo como um rodapé consolidado independente.")
 
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
@@ -141,7 +140,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     tabela_etapas = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
 
-    # Tabela com suporte nativo a edição e exclusão de linhas (`num_rows="dynamic"`)
+    # Tabela interativa limpa contendo exclusivamente as etapas reais
     orc_editado = st.data_editor(
         tabela_etapas,
         num_rows="dynamic",
@@ -156,7 +155,7 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    # Limpa e filtra qualquer tentativa de incluir linhas de Total na tabela de etapas
+    # Limpa e filtra o DataFrame editado
     orc_limpo = orc_editado[orc_editado["CC"].astype(str) != "999"]
     orc_limpo = orc_limpo[~orc_limpo["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
 
@@ -164,17 +163,20 @@ if menu == "📊 Dashboard & Orçamento":
         st.session_state.orcamentos = orc_limpo[["CC", "Etapa", "Orçamento Previsto"]]
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-    # TOTAL GERAL COMPLETAMENTE INDEPENDENTE E ISOLADO FORA DA TABELA (APENAS LEITURA)
+    # TOTAL GERAL EXIBIDO COMO LINHA DE RODAPÉ INTEGRADA (FORA DA EDIÇÃO, APENAS LEITURA)
     tot_previsto = orc_limpo["Orçamento Previsto"].sum()
     tot_real = orc_limpo["Custo Real"].sum()
     tot_saldo = orc_limpo["Saldo do Orçamento"].sum()
 
     st.markdown("---")
-    st.markdown("### 📊 Resumo Totalizador Geral da Obra (Isolado e Protegido)")
-    col_t1, col_t2, col_t3 = st.columns(3)
-    col_t1.metric("📌 Total Orçamento Previsto", fmt_brl(tot_previsto))
-    col_t2.metric("📌 Total Custo Real", fmt_brl(tot_real))
-    col_t3.metric("📌 Saldo Total do Orçamento", fmt_brl(tot_saldo))
+    st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 8px; border-left: 5px solid #ff4b4b; display: flex; justify-content: space-between; align-items: center; font-weight: bold;">
+        <span style="font-size: 1.1em; color: #31333F;">TOTAL GERAL DA OBRA:</span>
+        <span style="font-size: 1.0em; color: #31333F;">Previsto: {fmt_brl(tot_previsto)}</span>
+        <span style="font-size: 1.0em; color: #31333F;">Custo Real: {fmt_brl(tot_real)}</span>
+        <span style="font-size: 1.0em; color: #31333F;">Saldo: {fmt_brl(tot_saldo)}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
