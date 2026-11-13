@@ -38,10 +38,13 @@ ETAPAS = {
 ARQUIVO_DADOS = "dados_obra.csv"
 ARQUIVO_DIARIO = "diario_obra.csv"
 
+def fmt_brl(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 # Carregamento seguro dos dados
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
-        st.session_state.despesas = pd.read_csv(ARQUIVO_DADOS)
+        st.session_state.despesas = pd.read_csv(ARQUIVO_DADOS, sep=';')
     else:
         dados_iniciais = [
             {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "21/10/2025", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
@@ -62,7 +65,7 @@ if "despesas" not in st.session_state:
 
 if "diario" not in st.session_state:
     if os.path.exists(ARQUIVO_DIARIO):
-        st.session_state.diario = pd.read_csv(ARQUIVO_DIARIO)
+        st.session_state.diario = pd.read_csv(ARQUIVO_DIARIO, sep=';')
     else:
         st.session_state.diario = pd.DataFrame([
             {"Data": "10/09/2026", "Etapa": "19 - TAXAS ADM. / IMPOSTOS / ENCARGOS", "Responsável": "Eng. Responsável", "Clima": "Sol", "Equipe": 2, "Ocorrências": "Alvará de construção emitido pela Prefeitura de Nova Lima."}
@@ -89,17 +92,22 @@ if menu == "📊 Dashboard & Etapas":
     total_pendente = df['Saldo a Pagar'].sum()
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Custo Total Lançado", f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    col2.metric("Total Pago", f"R$ {total_pago:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    col3.metric("Saldo a Pagar", f"R$ {total_pendente:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    col1.metric("Custo Total Lançado", fmt_brl(total_geral))
+    col2.metric("Total Pago", fmt_brl(total_pago))
+    col3.metric("Saldo a Pagar", fmt_brl(total_pendente))
     col4.metric("Lançamentos", len(df))
 
     st.subheader("Resumo por Centro de Custo / Etapa")
     resumo_etapas = df.groupby(["CC", "Etapa"])[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
+    resumo_exibicao = resumo_etapas.copy()
+    resumo_exibicao["Valor Total"] = resumo_exibicao["Valor Total"].apply(fmt_brl)
+    resumo_exibicao["Valor Pago"] = resumo_exibicao["Valor Pago"].apply(fmt_brl)
+    resumo_exibicao["Saldo a Pagar"] = resumo_exibicao["Saldo a Pagar"].apply(fmt_brl)
+    
     c1, c2 = st.columns([1.2, 1])
     with c1:
-        st.dataframe(resumo_etapas, use_container_width=True, hide_index=True)
+        st.dataframe(resumo_exibicao, use_container_width=True, hide_index=True)
     with c2:
         fig = px.pie(resumo_etapas, values="Valor Total", names="Etapa", title="Distribuição de Custos", hole=0.4)
         st.plotly_chart(fig, use_container_width=True)
@@ -145,7 +153,11 @@ elif menu == "📋 Extrato & Edição de Notas":
         st.session_state.despesas,
         num_rows="dynamic",
         use_container_width=True,
-        key="editor_despesas"
+        key="editor_despesas",
+        column_config={
+            "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f"),
+            "Valor Pago": st.column_config.NumberColumn("Valor Pago (R$)", format="R$ %.2f")
+        }
     )
     
     if not df_editado.equals(st.session_state.despesas):
@@ -156,7 +168,7 @@ elif menu == "📋 Extrato & Edição de Notas":
     st.markdown("---")
     st.subheader("🗑️ Excluir Lançamento Específico")
     if len(st.session_state.despesas) > 0:
-        opcoes_exclusao = [f"#{i} - {row['Fornecedor']} (R$ {row['Valor Total']}) - {row['Data']}" for i, row in st.session_state.despesas.iterrows()]
+        opcoes_exclusao = [f"#{i} - {row['Fornecedor']} ({fmt_brl(row['Valor Total'])}) - {row['Data']}" for i, row in st.session_state.despesas.iterrows()]
         selecionado_para_excluir = st.selectbox("Escolha o lançamento para remover:", options=opcoes_exclusao)
         
         if st.button("❌ Excluir Lançamento Selecionado", type="primary"):
@@ -200,7 +212,6 @@ elif menu == "💾 Central de Backup Geral":
     
     df_diario_exp = st.session_state.diario.copy()
     
-    # Geração blindada em Excel nativo com tratamento correto de tipos para o Excel Online
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
