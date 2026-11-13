@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import io
 
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
@@ -77,6 +78,27 @@ menu = st.sidebar.radio("Navegação do Sistema", [
     "👷 Diário de Obra (Gestão)"
 ])
 
+# Seção de Backup e Exportação no Menu Lateral
+st.sidebar.markdown("---")
+st.sidebar.subheader("💾 Segurança & Backup")
+
+df_export = st.session_state.despesas.copy()
+df_export["Etapa"] = df_export["CC"].map(ETAPAS)
+df_export["Saldo a Pagar"] = df_export["Valor Total"] - df_export["Valor Pago"]
+
+# Função para gerar Excel em memória
+output = io.BytesIO()
+with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    df_export.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
+excel_data = output.getvalue()
+
+st.sidebar.download_button(
+    label="📥 Baixar Planilha (Excel)",
+    data=excel_data,
+    file_name="reserva_laguna_lote16_backup.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
 df = st.session_state.despesas.copy()
 df["Saldo a Pagar"] = df["Valor Total"] - df["Valor Pago"]
 df["Etapa"] = df["CC"].map(ETAPAS)
@@ -127,7 +149,6 @@ elif menu == "➕ Lançar Nova Despesa":
                 "Valor Pago": valor_pago, "Observações": obs
             }])
             st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
-            # Salva automaticamente no arquivo CSV
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
@@ -143,7 +164,6 @@ elif menu == "📋 Extrato & Edição de Notas":
         key="editor_despesas"
     )
     
-    # Atualiza e salva automaticamente no CSV sempre que houver alteração na tabela
     if not df_editado.equals(st.session_state.despesas):
         st.session_state.despesas = df_editado
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
