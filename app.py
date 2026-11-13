@@ -114,40 +114,38 @@ df["Etapa"] = df["CC"].map(ETAPAS)
 
 # TELA 1: DASHBOARD & ORÇAMENTO
 if menu == "📊 Dashboard & Orçamento":
-    # Calcula os totais gerais
     orc_total_previsto = st.session_state.orcamentos["Orçamento Previsto"].sum()
     total_geral = df['Valor Total'].sum()
     total_pago = df['Valor Pago'].sum()
     total_pendente = df['Saldo a Pagar'].sum()
     
-    # 5 Métricas no Topo (Incluindo Orçamento Previsto Total)
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Orçamento Previsto", fmt_brl(orc_total_previsto))
-    col2.metric("Custo Realizado", fmt_brl(total_geral))
+    col2.metric("Custo Real", fmt_brl(total_geral))
     col3.metric("Total Pago", fmt_brl(total_pago))
     col4.metric("Saldo a Pagar", fmt_brl(total_pendente))
     col5.metric("Lançamentos", len(df))
 
     st.markdown("---")
-    st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Realizado)")
+    st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
     st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto diretamente na tabela abaixo!")
 
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
     orc_df = st.session_state.orcamentos.copy()
     resumo_orcamento = pd.merge(orc_df, gastos_reais, on="CC", how="left").fillna(0.0)
-    resumo_orcamento.rename(columns={"Valor Total": "Gasto Real"}, inplace=True)
-    resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Gasto Real"]
+    resumo_orcamento.rename(columns={"Valor Total": "Custo Real"}, inplace=True)
+    resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Custo Real"]
 
+    # Tabela sem a coluna Saldo a Pagar, focada estritamente no Orçamento vs Custo Real
     orc_editado = st.data_editor(
-        resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Gasto Real", "Saldo a Pagar", "Saldo do Orçamento"]],
+        resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]],
         num_rows="fixed",
         use_container_width=True,
         key="editor_orcamento",
         column_config={
             "Orçamento Previsto": st.column_config.NumberColumn("Orçamento Previsto (R$)", format="R$ %.2f"),
-            "Gasto Real": st.column_config.NumberColumn("Gasto Real (R$)", format="R$ %.2f", disabled=True),
-            "Saldo a Pagar": st.column_config.NumberColumn("Saldo a Pagar (R$)", format="R$ %.2f", disabled=True),
+            "Custo Real": st.column_config.NumberColumn("Custo Real (R$)", format="R$ %.2f", disabled=True),
             "Saldo do Orçamento": st.column_config.NumberColumn("Saldo do Orçamento (R$)", format="R$ %.2f", disabled=True),
         }
     )
@@ -162,11 +160,11 @@ if menu == "📊 Dashboard & Orçamento":
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
         fig_bar = px.bar(
-            resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
+            resumo_orcamento[resumo_orcamento["Custo Real"] > 0], 
             x="Etapa", 
-            y=["Orçamento Previsto", "Gasto Real"], 
+            y=["Orçamento Previsto", "Custo Real"], 
             barmode="group",
-            title="Comparativo: Orçamento vs. Gasto Real",
+            title="Comparativo: Orçamento vs. Custo Real",
             labels={"value": "Valor (R$)", "variable": "Métrica"}
         )
         fig_bar.update_layout(xaxis_tickangle=-45)
@@ -174,10 +172,10 @@ if menu == "📊 Dashboard & Orçamento":
         
     with c_graf2:
         fig_pie = px.pie(
-            resumo_orcamento[resumo_orcamento["Gasto Real"] > 0], 
-            values="Gasto Real", 
+            resumo_orcamento[resumo_orcamento["Custo Real"] > 0], 
+            values="Custo Real", 
             names="Etapa", 
-            title="Distribuição dos Gastos Reais por Etapa", 
+            title="Distribuição do Custo Real por Etapa", 
             hole=0.4
         )
         st.plotly_chart(fig_pie, use_container_width=True)
