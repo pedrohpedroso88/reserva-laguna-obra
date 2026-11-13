@@ -101,7 +101,6 @@ if menu == "📊 Dashboard & Etapas":
     st.subheader("Resumo por Centro de Custo / Etapa")
     resumo_etapas = df.groupby(["CC", "Etapa"])[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
-    # Formata colunas monetárias para exibição amigável na tabela
     resumo_exibicao = resumo_etapas.copy()
     resumo_exibicao["Valor Total"] = resumo_exibicao["Valor Total"].apply(fmt_brl)
     resumo_exibicao["Valor Pago"] = resumo_exibicao["Valor Pago"].apply(fmt_brl)
@@ -130,39 +129,4 @@ elif menu == "➕ Lançar Nova Despesa":
         descricao = st.text_input("Descrição da Despesa *")
         
         col5, col6 = st.columns(2)
-        valor_total = col5.number_input("Valor Total (R$) *", min_value=0.0, step=50.0)
-        valor_pago = col6.number_input("Valor Já Pago (R$)", min_value=0.0, step=50.0)
-        
-        obs = st.text_input("Observações (Ex: Pago por..., parcelamento, etc.)")
-        
-        enviado = st.form_submit_button("✅ Salvar Lançamento")
-        if enviado and fornecedor and valor_total > 0:
-            novo = pd.DataFrame([{
-                "Fornecedor": fornecedor, "NF/DOC": nf_doc, "Data": data_str,
-                "Descrição": descricao, "CC": cc_selecionado, "Valor Total": valor_total,
-                "Valor Pago": valor_pago, "Observações": obs
-            }])
-            st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
-            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
-            st.success("Despesa registrada e salva com sucesso na nuvem!")
-
-# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
-elif menu == "📋 Extrato & Edição de Notas":
-    st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Edite células diretamente na tabela ou remova um registro específico logo abaixo.")
-    
-    df_editado = st.data_editor(
-        st.session_state.despesas,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="editor_despesas"
-    )
-    
-    if not df_editado.equals(st.session_state.despesas):
-        st.session_state.despesas = df_editado
-        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
-        st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
-
-    st.markdown("---")
-    st.subheader("🗑️ Excluir Lançamento Específico")
-    if len(st.session_state.despesas) > 0:
+        valor_total = col5.number_input("Valor Total (
