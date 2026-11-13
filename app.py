@@ -38,10 +38,6 @@ ETAPAS = {
 ARQUIVO_DADOS = "dados_obra.csv"
 ARQUIVO_DIARIO = "diario_obra.csv"
 
-# Função auxiliar para formatar em Reais (Padrão BR)
-def fmt_brl(valor):
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
 # Carregamento seguro dos dados
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
@@ -93,22 +89,17 @@ if menu == "📊 Dashboard & Etapas":
     total_pendente = df['Saldo a Pagar'].sum()
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Custo Total Lançado", fmt_brl(total_geral))
-    col2.metric("Total Pago", fmt_brl(total_pago))
-    col3.metric("Saldo a Pagar", fmt_brl(total_pendente))
+    col1.metric("Custo Total Lançado", f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    col2.metric("Total Pago", f"R$ {total_pago:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    col3.metric("Saldo a Pagar", f"R$ {total_pendente:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
     col4.metric("Lançamentos", len(df))
 
     st.subheader("Resumo por Centro de Custo / Etapa")
     resumo_etapas = df.groupby(["CC", "Etapa"])[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
-    resumo_exibicao = resumo_etapas.copy()
-    resumo_exibicao["Valor Total"] = resumo_exibicao["Valor Total"].apply(fmt_brl)
-    resumo_exibicao["Valor Pago"] = resumo_exibicao["Valor Pago"].apply(fmt_brl)
-    resumo_exibicao["Saldo a Pagar"] = resumo_exibicao["Saldo a Pagar"].apply(fmt_brl)
-    
-    c1, c2 = st.columns([1.3, 1])
+    c1, c2 = st.columns([1.2, 1])
     with c1:
-        st.dataframe(resumo_exibicao, use_container_width=True, hide_index=True)
+        st.dataframe(resumo_etapas, use_container_width=True, hide_index=True)
     with c2:
         fig = px.pie(resumo_etapas, values="Valor Total", names="Etapa", title="Distribuição de Custos", hole=0.4)
         st.plotly_chart(fig, use_container_width=True)
@@ -129,4 +120,99 @@ elif menu == "➕ Lançar Nova Despesa":
         descricao = st.text_input("Descrição da Despesa *")
         
         col5, col6 = st.columns(2)
-        valor_total = col5.number_input("Valor Total (
+        valor_total = col5.number_input("Valor Total (R$) *", min_value=0.0, step=50.0)
+        valor_pago = col6.number_input("Valor Já Pago (R$)", min_value=0.0, step=50.0)
+        
+        obs = st.text_input("Observações (Ex: Pago por..., parcelamento, etc.)")
+        
+        enviado = st.form_submit_button("✅ Salvar Lançamento")
+        if enviado and fornecedor and valor_total > 0:
+            novo = pd.DataFrame([{
+                "Fornecedor": fornecedor, "NF/DOC": nf_doc, "Data": data_str,
+                "Descrição": descricao, "CC": cc_selecionado, "Valor Total": valor_total,
+                "Valor Pago": valor_pago, "Observações": obs
+            }])
+            st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
+            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
+            st.success("Despesa registrada e salva com sucesso na nuvem!")
+
+# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
+elif menu == "📋 Extrato & Edição de Notas":
+    st.subheader("Controle, Edição e Exclusão de Lançamentos")
+    st.info("💡 **Dica:** Edite células diretamente na tabela ou remova um registro específico logo abaixo.")
+    
+    df_editado = st.data_editor(
+        st.session_state.despesas,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor_despesas"
+    )
+    
+    if not df_editado.equals(st.session_state.despesas):
+        st.session_state.despesas = df_editado
+        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
+        st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
+
+    st.markdown("---")
+    st.subheader("🗑️ Excluir Lançamento Específico")
+    if len(st.session_state.despesas) > 0:
+        opcoes_exclusao = [f"#{i} - {row['Fornecedor']} (R$ {row['Valor Total']}) - {row['Data']}" for i, row in st.session_state.despesas.iterrows()]
+        selecionado_para_excluir = st.selectbox("Escolha o lançamento para remover:", options=opcoes_exclusao)
+        
+        if st.button("❌ Excluir Lançamento Selecionado", type="primary"):
+            indice_para_remover = int(selecionado_para_excluir.split(" ")[0].replace("#", ""))
+            st.session_state.despesas = st.session_state.despesas.drop(indice_para_remover).reset_index(drop=True)
+            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
+            st.success("Lançamento excluído com sucesso!")
+            st.rerun()
+
+# TELA 4: DIÁRIO DE OBRA
+elif menu == "👷 Diário de Obra (Gestão)":
+    st.subheader("Registro Diário de Obra (RDO)")
+    with st.form("form_rdo", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        data_rdo_input = c1.date_input("Data")
+        data_rdo_str = data_rdo_input.strftime("%d/%m/%Y")
+        etapa_rdo = c2.selectbox("Etapa em Execução", list(ETAPAS.values()))
+        clima = c3.selectbox("Clima", ["Sol", "Nublado", "Chuva"])
+        
+        c4, c5 = st.columns(2)
+        resp = c4.text_input("Responsável pelo Registro")
+        qtd_equipe = c5.number_input("Qtd. Trabalhadores na Obra", min_value=0, step=1)
+        ocorrencias = st.text_area("Atividades Executadas e Observações")
+        
+        if st.form_submit_button("Registrar Diário"):
+            novo_rdo = pd.DataFrame([{"Data": data_rdo_str, "Etapa": etapa_rdo, "Responsável": resp, "Clima": clima, "Equipe": qtd_equipe, "Ocorrências": ocorrencias}])
+            st.session_state.diario = pd.concat([st.session_state.diario, novo_rdo], ignore_index=True)
+            st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False, sep=';', encoding='utf-8-sig')
+            st.success("Diário registrado com sucesso!")
+            
+    st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
+
+# TELA 5: CENTRAL DE BACKUP GERAL (Formato Excel Nativo Otimizado)
+elif menu == "💾 Central de Backup Geral":
+    st.subheader("Central de Backup e Cópia de Segurança Completa")
+    st.markdown("Aqui você pode baixar o arquivo de backup unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba, compatível com qualquer versão do Excel.")
+    
+    df_despesas_exp = st.session_state.despesas.copy()
+    df_despesas_exp["Etapa"] = df_despesas_exp["CC"].map(ETAPAS)
+    df_despesas_exp["Saldo a Pagar"] = df_despesas_exp["Valor Total"] - df_despesas_exp["Valor Pago"]
+    
+    df_diario_exp = st.session_state.diario.copy()
+    
+    # Geração blindada em Excel nativo com tratamento correto de tipos para o Excel Online
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
+        df_diario_exp.to_excel(writer, index=False, sheet_name='Diario de Obra (RDO)')
+    backup_data = output.getvalue()
+    
+    st.download_button(
+        label="📥 Baixar Backup Geral Oficial (.xlsx)",
+        data=backup_data,
+        file_name="backup_completo_reserva_laguna.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+    
+    st.info("💡 **Dica de Segurança:** Este arquivo consolida 100% dos dados da sua obra (despesas e diário de campo) em um formato de planilha oficial com múltiplas abas.")
