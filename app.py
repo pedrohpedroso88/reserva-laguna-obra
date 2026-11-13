@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
@@ -34,28 +35,39 @@ ETAPAS = {
     21: "21 - MÃO DE OBRA"
 }
 
-# Inicializa dados reais da planilha na sessão
+ARQUIVO_DADOS = "dados_obra.csv"
+ARQUIVO_DIARIO = "diario_obra.csv"
+
+# Inicializa ou carrega os dados de despesas persistentes
 if "despesas" not in st.session_state:
-    dados_iniciais = [
-        {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "2025-10-21", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "2025-11-13", "Descrição": "Projeto arquitetônico - 1ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Associação de moradores Reserva Laguna", "NF/DOC": "PIX", "Data": "2025-12-03", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 1400.00, "Valor Pago": 1400.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Bate & Sonda", "NF/DOC": "PIX", "Data": "2026-02-02", "Descrição": "Sondagem", "CC": 2, "Valor Total": 1600.00, "Valor Pago": 1600.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "WM Engenharia e Consultorias Ltda (DWT)", "NF/DOC": "20/27/30/08", "Data": "2026-03-02", "Descrição": "Projetos estrutural, hidráulico e elétrico", "CC": 0, "Valor Total": 12300.00, "Valor Pago": 12300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "2026-03-09", "Descrição": "Projeto arquitetônico - 2ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "3332403332", "Data": "2026-03-12", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 491.71, "Valor Pago": 491.71, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "PIX", "Data": "2026-06-08", "Descrição": "Taxa de análise de projeto terraplanagem", "CC": 19, "Valor Total": 250.74, "Valor Pago": 250.74, "Observações": "Pago por Marco Flávio - Reembolsado"},
-        {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "2026-08-18", "Descrição": "Taxa de movimentação complementar de terra", "CC": 19, "Valor Total": 25.35, "Valor Pago": 25.35, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Lais Bertini", "NF/DOC": "PIX", "Data": "2026-08-26", "Descrição": "Documentação ambiental - Aterro", "CC": 19, "Valor Total": 1774.73, "Valor Pago": 1774.73, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "2026-09-10", "Descrição": "Taxa de alvará de construção", "CC": 19, "Valor Total": 570.40, "Valor Pago": 570.40, "Observações": "Pago por Sônia dos Santos Carvalho"},
-        {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "2026-09-15", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
-    ]
-    st.session_state.despesas = pd.DataFrame(dados_iniciais)
+    if os.path.exists(ARQUIVO_DADOS):
+        st.session_state.despesas = pd.read_csv(ARQUIVO_DADOS)
+    else:
+        dados_iniciais = [
+            {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "2025-10-21", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "2025-11-13", "Descrição": "Projeto arquitetônico - 1ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Associação de moradores Reserva Laguna", "NF/DOC": "PIX", "Data": "2025-12-03", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 1400.00, "Valor Pago": 1400.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Bate & Sonda", "NF/DOC": "PIX", "Data": "2026-02-02", "Descrição": "Sondagem", "CC": 2, "Valor Total": 1600.00, "Valor Pago": 1600.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "WM Engenharia e Consultorias Ltda (DWT)", "NF/DOC": "20/27/30/08", "Data": "2026-03-02", "Descrição": "Projetos estrutural, hidráulico e elétrico", "CC": 0, "Valor Total": 12300.00, "Valor Pago": 12300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "2026-03-09", "Descrição": "Projeto arquitetônico - 2ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "3332403332", "Data": "2026-03-12", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 491.71, "Valor Pago": 491.71, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "PIX", "Data": "2026-06-08", "Descrição": "Taxa de análise de projeto terraplanagem", "CC": 19, "Valor Total": 250.74, "Valor Pago": 250.74, "Observações": "Pago por Marco Flávio - Reembolsado"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "2026-08-18", "Descrição": "Taxa de movimentação complementar de terra", "CC": 19, "Valor Total": 25.35, "Valor Pago": 25.35, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Lais Bertini", "NF/DOC": "PIX", "Data": "2026-08-26", "Descrição": "Documentação ambiental - Aterro", "CC": 19, "Valor Total": 1774.73, "Valor Pago": 1774.73, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "2026-09-10", "Descrição": "Taxa de alvará de construção", "CC": 19, "Valor Total": 570.40, "Valor Pago": 570.40, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "2026-09-15", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
+        ]
+        st.session_state.despesas = pd.DataFrame(dados_iniciais)
+        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
 
 if "diario" not in st.session_state:
-    st.session_state.diario = pd.DataFrame([
-        {"Data": "2026-09-10", "Etapa": "19 - TAXAS ADM. / IMPOSTOS / ENCARGOS", "Responsável": "Eng. Responsável", "Clima": "Sol", "Equipe": 2, "Ocorrências": "Alvará de construção emitido pela Prefeitura de Nova Lima."}
-    ])
+    if os.path.exists(ARQUIVO_DIARIO):
+        st.session_state.diario = pd.read_csv(ARQUIVO_DIARIO)
+    else:
+        st.session_state.diario = pd.DataFrame([
+            {"Data": "2026-09-10", "Etapa": "19 - TAXAS ADM. / IMPOSTOS / ENCARGOS", "Responsável": "Eng. Responsável", "Clima": "Sol", "Equipe": 2, "Ocorrências": "Alvará de construção emitido pela Prefeitura de Nova Lima."}
+        ])
+        st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
 
 # Menu Lateral do Sistema
 menu = st.sidebar.radio("Navegação do Sistema", [
@@ -115,14 +127,15 @@ elif menu == "➕ Lançar Nova Despesa":
                 "Valor Pago": valor_pago, "Observações": obs
             }])
             st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
-            st.success("Despesa registrada com sucesso!")
+            # Salva automaticamente no arquivo CSV
+            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+            st.success("Despesa registrada e salva com sucesso na nuvem!")
 
 # TELA 3: EXTRATO E EDIÇÃO DIRETA
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle e Edição Direta de Lançamentos")
-    st.info("💡 **Dica:** Você pode clicar diretamente nas células da tabela abaixo para editar valores, fornecedores, descrições ou status de pagamento. As alterações são salvas na hora!")
+    st.info("💡 **Dica:** Edite células diretamente na tabela abaixo ou remova linhas. As alterações são salvas automaticamente na nuvem!")
     
-    # Tabela editável direto na tela
     df_editado = st.data_editor(
         st.session_state.despesas,
         num_rows="dynamic",
@@ -130,8 +143,11 @@ elif menu == "📋 Extrato & Edição de Notas":
         key="editor_despesas"
     )
     
-    # Atualiza o estado da sessão com as edições feitas pelo usuário na tabela
-    st.session_state.despesas = df_editado
+    # Atualiza e salva automaticamente no CSV sempre que houver alteração na tabela
+    if not df_editado.equals(st.session_state.despesas):
+        st.session_state.despesas = df_editado
+        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+        st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
 
 # TELA 4: DIÁRIO DE OBRA
 elif menu == "👷 Diário de Obra (Gestão)":
@@ -150,6 +166,7 @@ elif menu == "👷 Diário de Obra (Gestão)":
         if st.form_submit_button("Registrar Diário"):
             novo_rdo = pd.DataFrame([{"Data": str(data_rdo), "Etapa": etapa_rdo, "Responsável": resp, "Clima": clima, "Equipe": qtd_equipe, "Ocorrências": ocorrencias}])
             st.session_state.diario = pd.concat([st.session_state.diario, novo_rdo], ignore_index=True)
-            st.success("Diário registrado com sucesso!")
+            st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
+            st.success("Diário registrado e salvo com sucesso!")
             
     st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
