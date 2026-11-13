@@ -4,7 +4,7 @@ import plotly.express as px
 import os
 import io
 
-# Configuração da página (Ajustado para wide, ideal para monitores e responsivo para menores)
+# Configuração da página
 st.set_page_config(page_title="Gestão de Obra - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
 
 st.title("🏗️ Sistema de Obra - Reserva Laguna (Lote 16 QC)")
@@ -118,7 +118,6 @@ if menu == "📊 Dashboard & Orçamento":
     total_geral = df['Valor Total'].sum()
     total_pendente = df['Saldo a Pagar'].sum()
     
-    # Ajustado para 4 colunas (removido Total Pago e otimizado para não espremer em notebooks de 15")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Orçamento Previsto", fmt_brl(orc_total_previsto))
     col2.metric("Custo Real", fmt_brl(total_geral))
@@ -136,8 +135,26 @@ if menu == "📊 Dashboard & Orçamento":
     resumo_orcamento.rename(columns={"Valor Total": "Custo Real"}, inplace=True)
     resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Custo Real"]
 
+    # Cria uma cópia para exibição com a linha de TOTAL no final
+    resumo_exibicao = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
+    
+    # Calcula os totais gerais
+    tot_previsto = resumo_exibicao["Orçamento Previsto"].sum()
+    tot_real = resumo_exibicao["Custo Real"].sum()
+    tot_saldo = resumo_exibicao["Saldo do Orçamento"].sum()
+    
+    # Adiciona a linha de TOTAL ao final do DataFrame de exibição
+    linha_total = pd.DataFrame([{
+        "CC": 999, 
+        "Etapa": "TOTAL GERAL DA OBRA", 
+        "Orçamento Previsto": tot_previsto, 
+        "Custo Real": tot_real, 
+        "Saldo do Orçamento": tot_saldo
+    }])
+    resumo_exibicao_com_total = pd.concat([resumo_exibicao, linha_total], ignore_index=True)
+
     orc_editado = st.data_editor(
-        resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]],
+        resumo_exibicao_com_total,
         num_rows="fixed",
         use_container_width=True,
         key="editor_orcamento",
@@ -148,14 +165,15 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    if not orc_editado[["CC", "Etapa", "Orçamento Previsto"]].equals(st.session_state.orcamentos):
-        st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
+    # Atualiza apenas as linhas reais (ignorando a última linha de total com CC 999)
+    orc_atualizado_pelo_usuario = orc_editado[orc_editado["CC"] != 999][["CC", "Etapa", "Orçamento Previsto"]]
+    if not orc_atualizado_pelo_usuario.equals(st.session_state.orcamentos):
+        st.session_state.orcamentos = orc_atualizado_pelo_usuario
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
     
-    # Layout responsivo: em telas menores (notebooks), os gráficos quebram para baixo automaticamente sem cortar
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
         fig_bar = px.bar(
@@ -212,12 +230,11 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO (Com a coluna Saldo a Pagar de volta)
+# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
     st.info("💡 **Dica:** Edite células diretamente na tabela (incluindo o Saldo a Pagar) ou remova um registro específico logo abaixo.")
     
-    # Recalcula a coluna Saldo a Pagar para garantir exibição correta na tabela editável
     st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
 
     df_editado = st.data_editor(
@@ -298,7 +315,7 @@ elif menu == "💾 Central de Backup Geral":
         data=backup_data,
         file_name="backup_completo_reserva_laguna.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+        use_container_width=True
     )
     
     st.info("💡 **Dica de Segurança:** Este arquivo consolida orçamentos, custos reais e diário de campo em planilhas oficiais com abas.")
