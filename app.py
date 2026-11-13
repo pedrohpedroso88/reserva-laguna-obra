@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import io
 
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
@@ -188,10 +189,10 @@ elif menu == "👷 Diário de Obra (Gestão)":
             
     st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
 
-# TELA 5: CENTRAL DE BACKUP GERAL
+# TELA 5: CENTRAL DE BACKUP GERAL (Formato Excel Nativo Otimizado)
 elif menu == "💾 Central de Backup Geral":
     st.subheader("Central de Backup e Cópia de Segurança Completa")
-    st.markdown("Aqui você pode baixar arquivos de backup em formato universal compatível com o **Excel Online** e **Google Planilhas** sem restrições de permissão.")
+    st.markdown("Aqui você pode baixar o arquivo de backup unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba, compatível com qualquer versão do Excel.")
     
     df_despesas_exp = st.session_state.despesas.copy()
     df_despesas_exp["Etapa"] = df_despesas_exp["CC"].map(ETAPAS)
@@ -199,26 +200,19 @@ elif menu == "💾 Central de Backup Geral":
     
     df_diario_exp = st.session_state.diario.copy()
     
-    # Converte para CSV compatível com Excel Online (separador ponto e vírgula e acentuação UTF-8)
-    csv_despesas = df_despesas_exp.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-    csv_diario = df_diario_exp.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    # Geração blindada em Excel nativo com tratamento correto de tipos para o Excel Online
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
+        df_diario_exp.to_excel(writer, index=False, sheet_name='Diario de Obra (RDO)')
+    backup_data = output.getvalue()
     
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        st.download_button(
-            label="📥 Baixar Backup: Extrato de Despesas",
-            data=csv_despesas,
-            file_name="backup_extrato_despesas.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    with col_b2:
-        st.download_button(
-            label="📥 Baixar Backup: Diário de Obra",
-            data=csv_diario,
-            file_name="backup_diario_obra.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+    st.download_button(
+        label="📥 Baixar Backup Geral Oficial (.xlsx)",
+        data=backup_data,
+        file_name="backup_completo_reserva_laguna.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
     
-    st.info("💡 **Dica:** Como os arquivos usam o padrão universal (`.csv` com codificação correta para o Brasil), basta abri-los diretamente no seu Excel Online ou Google Planilhas sem nenhum erro de acesso ou bloqueio de permissão.")
+    st.info("💡 **Dica de Segurança:** Este arquivo consolida 100% dos dados da sua obra (despesas e diário de campo) em um formato de planilha oficial com múltiplas abas.")
