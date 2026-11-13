@@ -140,12 +140,10 @@ if menu == "📊 Dashboard & Orçamento":
 
     tabela_etapas = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
 
-    # Calcula os totais das etapas reais
     tot_previsto = tabela_etapas["Orçamento Previsto"].sum()
     tot_real = tabela_etapas["Custo Real"].sum()
     tot_saldo = tabela_etapas["Saldo do Orçamento"].sum()
 
-    # Cria a linha de rodapé com CC 999 para ficar isolada e no fim da tabela
     linha_total = pd.DataFrame([{
         "CC": 999,
         "Etapa": "📌 TOTAL GERAL DA OBRA",
@@ -156,7 +154,6 @@ if menu == "📊 Dashboard & Orçamento":
 
     tabela_com_total = pd.concat([tabela_etapas, linha_total], ignore_index=True)
 
-    # Tabela interativa exibindo o total integrado no rodapé (protegido contra edição incorreta)
     orc_editado = st.data_editor(
         tabela_com_total,
         num_rows="dynamic",
@@ -171,7 +168,6 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    # Filtra e salva apenas as etapas reais (excluindo a linha 999 do salvamento para não duplicar)
     orc_limpo = orc_editado[orc_editado["CC"].astype(str) != "999"]
     orc_limpo = orc_limpo[~orc_limpo["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
 
@@ -238,13 +234,14 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Ordenação por clique na coluna)
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Edite células diretamente na tabela (incluindo o Saldo a Pagar) ou remova um registro específico logo abaixo.")
+    st.info("💡 **Dica:** Clique no **cabeçalho de qualquer coluna** (Fornecedor, Data, Valor Total, etc.) para ordenar as linhas instantaneamente de forma ascendente ou descendente. Edite diretamente na tabela ou remova um registro abaixo.")
     
     st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
 
+    # Utilizando st.data_editor nativo: por padrão, clicar no cabeçalho das colunas já ordena os dados no Streamlit!
     df_editado = st.data_editor(
         st.session_state.despesas,
         num_rows="dynamic",
