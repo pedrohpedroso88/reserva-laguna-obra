@@ -45,7 +45,7 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa
+# Inicializa ou carrega os Orçamentos por Etapa (com todas as 22 etapas originais)
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
         st.session_state.orcamentos = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
@@ -126,38 +126,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
-    st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. Use os botões abaixo para adicionar novas etapas ou excluir uma etapa selecionada.")
-
-    # Opções de Adição e Exclusão Limpas e Organizadas
-    col_opt1, col_opt2 = st.columns(2)
-    
-    with col_opt1:
-        with st.expander("➕ Adicionar Nova Etapa de Orçamento"):
-            with st.form("form_novo_orcamento", clear_on_submit=True):
-                novo_cc = st.selectbox("Selecione a Etapa / Centro de Custo", options=list(ETAPAS.keys()), format_func=lambda x: ETAPAS[x])
-                novo_valor_previsto = st.number_input("Valor do Orçamento Previsto (R$)", min_value=0.0, step=100.0)
-                btn_add = st.form_submit_button("Adicionar Linha")
-                if btn_add:
-                    if novo_cc in st.session_state.orcamentos["CC"].values:
-                        st.warning("Esta etapa já possui um orçamento cadastrado. Edite-o diretamente na tabela.")
-                    else:
-                        nova_linha = pd.DataFrame([{"CC": novo_cc, "Etapa": ETAPAS[novo_cc], "Orçamento Previsto": novo_valor_previsto}])
-                        st.session_state.orcamentos = pd.concat([st.session_state.orcamentos, nova_linha], ignore_index=True)
-                        st.session_state.orcamentos = st.session_state.orcamentos.sort_values("CC").reset_index(drop=True)
-                        st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
-                        st.success("Nova linha adicionada com sucesso!")
-                        st.rerun()
-
-    with col_opt2:
-        with st.expander("🗑️ Excluir Etapa Selecionada"):
-            with st.form("form_excluir_orcamento"):
-                etapa_para_excluir = st.selectbox("Selecione a etapa para remover:", options=st.session_state.orcamentos["CC"].tolist(), format_func=lambda x: ETAPAS[x], key="select_del_etapa")
-                btn_del = st.form_submit_button("❌ Excluir Etapa Selecionada", type="primary")
-                if btn_del:
-                    st.session_state.orcamentos = st.session_state.orcamentos[st.session_state.orcamentos["CC"] != etapa_para_excluir].reset_index(drop=True)
-                    st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
-                    st.success("Etapa removida com sucesso!")
-                    st.rerun()
+    st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto, **adicionar novas linhas** clicando no ícone de `+` no canto da tabela ou **excluir linhas** diretamente selecionando e apagando na tabela interativa abaixo.")
 
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
@@ -168,32 +137,33 @@ if menu == "📊 Dashboard & Orçamento":
 
     tabela_etapas = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
 
-    # Tabela editável apenas para os valores previstos das etapas
+    # Tabela com suporte nativo a inserção e exclusão de linhas (`num_rows="dynamic"`)
     orc_editado = st.data_editor(
         tabela_etapas,
-        num_rows="fixed",
+        num_rows="dynamic",
         use_container_width=True,
         key="editor_orcamento",
         column_config={
-            "CC": st.column_config.NumberColumn("CC", disabled=True),
-            "Etapa": st.column_config.TextColumn("Etapa", disabled=True),
+            "CC": st.column_config.NumberColumn("CC"),
+            "Etapa": st.column_config.TextColumn("Etapa"),
             "Orçamento Previsto": st.column_config.NumberColumn("Orçamento Previsto (R$)", format="R$ %.2f"),
             "Custo Real": st.column_config.NumberColumn("Custo Real (R$)", format="R$ %.2f", disabled=True),
             "Saldo do Orçamento": st.column_config.NumberColumn("Saldo do Orçamento (R$)", format="R$ %.2f", disabled=True),
         }
     )
 
-    if not orc_editado[["CC", "Etapa", "Orçamento Previsto"]].equals(st.session_state.orcamentos):
+    # Salva alterações (tanto edições quanto exclusões feitas diretamente na tabela)
+    if not orc_editado.equals(tabela_etapas):
         st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-    # Quadro de Totais Gerais Fixo e Protegido Fora da Tabela (Apenas Leitura)
+    # TOTAL GERAL COMPLETAMENTE INDEPENDENTE E ISOLADO FORA DA TABELA (APENAS LEITURA)
     tot_previsto = orc_editado["Orçamento Previsto"].sum()
     tot_real = orc_editado["Custo Real"].sum()
     tot_saldo = orc_editado["Saldo do Orçamento"].sum()
 
     st.markdown("---")
-    st.markdown("### 📊 Resumo Totalizador da Obra (Apenas Leitura)")
+    st.markdown("### 📊 Resumo Totalizador Geral da Obra (Isolado e Protegido)")
     col_t1, col_t2, col_t3 = st.columns(3)
     col_t1.metric("📌 Total Orçamento Previsto", fmt_brl(tot_previsto))
     col_t2.metric("📌 Total Custo Real", fmt_brl(tot_real))
