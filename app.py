@@ -234,20 +234,21 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Ordenação por Coluna e por Data Cronológica)
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Correção de Retorno ao Padrão)
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Clique no **cabeçalho de qualquer coluna** para ordenar, ou utilize o seletor rápido abaixo para ordenar por data cronológica, fornecedor ou forma de pagamento.")
+    st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar por data cronológica, fornecedor, forma de pagamento ou retornar ao padrão original.")
 
-    # Opções rápidas de ordenação para garantir precisão em datas e formas de pagamento
     col_ord1, col_ord2 = st.columns([2, 2])
     with col_ord1:
         criterio_ordenacao = st.selectbox("Ordenar por:", ["Padrão (Como cadastrado)", "Data (Cronológica: Antiga > Recente)", "Data (Recente > Antiga)", "Forma / Documento (NF/DOC)", "Fornecedor (A-Z)", "Valor Total (Maior > Menor)"])
     
-    df_trabalho = st.session_state.despesas.copy()
+    # Cria uma cópia preservando o índice original para permitir o retorno perfeito ao padrão
+    df_trabalho = st.session_state.despesas.copy().reset_index(drop=True)
     
-    # Aplicação da ordenação escolhida de forma inteligente
-    if criterio_ordenacao == "Data (Cronológica: Antiga > Recente)":
+    if criterio_ordenacao == "Padrão (Como cadastrado)":
+        df_trabalho = df_trabalho.sort_index()
+    elif criterio_ordenacao == "Data (Cronológica: Antiga > Recente)":
         df_trabalho["_dt_temp"] = pd.to_datetime(df_trabalho["Data"], format="%d/%m/%Y", errors="coerce")
         df_trabalho = df_trabalho.sort_values(by="_dt_temp", ascending=True).drop(columns=["_dt_temp"])
     elif criterio_ordenacao == "Data (Recente > Antiga)":
@@ -274,7 +275,6 @@ elif menu == "📋 Extrato & Edição de Notas":
         }
     )
     
-    # Atualiza mantendo a integridade do banco de dados de despesas
     if not df_editado.drop(columns=["Saldo a Pagar"], errors="ignore").equals(st.session_state.despesas.drop(columns=["Saldo a Pagar"], errors="ignore")):
         st.session_state.despesas = df_editado.drop(columns=["Saldo a Pagar"], errors="ignore")
         st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
