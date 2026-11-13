@@ -126,7 +126,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
-    st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto diretamente na tabela abaixo!")
+    st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto diretamente na tabela abaixo. O rodapé consolida os totais de forma automática e protegida.")
 
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
@@ -135,26 +135,11 @@ if menu == "📊 Dashboard & Orçamento":
     resumo_orcamento.rename(columns={"Valor Total": "Custo Real"}, inplace=True)
     resumo_orcamento["Saldo do Orçamento"] = resumo_orcamento["Orçamento Previsto"] - resumo_orcamento["Custo Real"]
 
-    # Cria uma cópia para exibição com a linha de TOTAL no final
-    resumo_exibicao = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
-    
-    # Calcula os totais gerais
-    tot_previsto = resumo_exibicao["Orçamento Previsto"].sum()
-    tot_real = resumo_exibicao["Custo Real"].sum()
-    tot_saldo = resumo_exibicao["Saldo do Orçamento"].sum()
-    
-    # Adiciona a linha de TOTAL ao final do DataFrame de exibição
-    linha_total = pd.DataFrame([{
-        "CC": 999, 
-        "Etapa": "TOTAL GERAL DA OBRA", 
-        "Orçamento Previsto": tot_previsto, 
-        "Custo Real": tot_real, 
-        "Saldo do Orçamento": tot_saldo
-    }])
-    resumo_exibicao_com_total = pd.concat([resumo_exibicao, linha_total], ignore_index=True)
+    # Tabela puramente com as etapas (sem risco de misturar com o total)
+    tabela_etapas = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
 
     orc_editado = st.data_editor(
-        resumo_exibicao_com_total,
+        tabela_etapas,
         num_rows="fixed",
         use_container_width=True,
         key="editor_orcamento",
@@ -165,11 +150,20 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    # Atualiza apenas as linhas reais (ignorando a última linha de total com CC 999)
-    orc_atualizado_pelo_usuario = orc_editado[orc_editado["CC"] != 999][["CC", "Etapa", "Orçamento Previsto"]]
-    if not orc_atualizado_pelo_usuario.equals(st.session_state.orcamentos):
-        st.session_state.orcamentos = orc_atualizado_pelo_usuario
+    if not orc_editado[["CC", "Etapa", "Orçamento Previsto"]].equals(st.session_state.orcamentos):
+        st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
+
+    # Quadro de Totais Gerais Fixo e Protegido Logo Abaixo da Tabela
+    tot_previsto = orc_editado["Orçamento Previsto"].sum()
+    tot_real = orc_editado["Custo Real"].sum()
+    tot_saldo = orc_editado["Saldo do Orçamento"].sum()
+
+    st.markdown("### 📊 Resumo Totalizador da Obra")
+    col_t1, col_t2, col_t3 = st.columns(3)
+    col_t1.metric("📌 Total Orçamento Previsto", fmt_brl(tot_previsto))
+    col_t2.metric("📌 Total Custo Real", fmt_brl(tot_real))
+    col_t3.metric("📌 Saldo Total do Orçamento", fmt_brl(tot_saldo))
 
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
