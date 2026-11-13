@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-import io
 
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obras - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
@@ -58,7 +57,7 @@ if "despesas" not in st.session_state:
             {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "15/09/2026", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
         ]
         st.session_state.despesas = pd.DataFrame(dados_iniciais)
-        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
 
 if "diario" not in st.session_state:
     if os.path.exists(ARQUIVO_DIARIO):
@@ -67,7 +66,7 @@ if "diario" not in st.session_state:
         st.session_state.diario = pd.DataFrame([
             {"Data": "10/09/2026", "Etapa": "19 - TAXAS ADM. / IMPOSTOS / ENCARGOS", "Responsável": "Eng. Responsável", "Clima": "Sol", "Equipe": 2, "Ocorrências": "Alvará de construção emitido pela Prefeitura de Nova Lima."}
         ])
-        st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
+        st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False, sep=';', encoding='utf-8-sig')
 
 # Menu Lateral
 menu = st.sidebar.radio("Navegação do Sistema", [
@@ -133,7 +132,7 @@ elif menu == "➕ Lançar Nova Despesa":
                 "Valor Pago": valor_pago, "Observações": obs
             }])
             st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
-            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
 # TELA 3: EXTRATO, EDIÇÃO E EXCLUSÃO
@@ -150,7 +149,7 @@ elif menu == "📋 Extrato & Edição de Notas":
     
     if not df_editado.equals(st.session_state.despesas):
         st.session_state.despesas = df_editado
-        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+        st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
         st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
 
     st.markdown("---")
@@ -162,7 +161,7 @@ elif menu == "📋 Extrato & Edição de Notas":
         if st.button("❌ Excluir Lançamento Selecionado", type="primary"):
             indice_para_remover = int(selecionado_para_excluir.split(" ")[0].replace("#", ""))
             st.session_state.despesas = st.session_state.despesas.drop(indice_para_remover).reset_index(drop=True)
-            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False)
+            st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Lançamento excluído com sucesso!")
             st.rerun()
 
@@ -184,7 +183,7 @@ elif menu == "👷 Diário de Obra (Gestão)":
         if st.form_submit_button("Registrar Diário"):
             novo_rdo = pd.DataFrame([{"Data": data_rdo_str, "Etapa": etapa_rdo, "Responsável": resp, "Clima": clima, "Equipe": qtd_equipe, "Ocorrências": ocorrencias}])
             st.session_state.diario = pd.concat([st.session_state.diario, novo_rdo], ignore_index=True)
-            st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False)
+            st.session_state.diario.to_csv(ARQUIVO_DIARIO, index=False, sep=';', encoding='utf-8-sig')
             st.success("Diário registrado com sucesso!")
             
     st.dataframe(st.session_state.diario, use_container_width=True, hide_index=True)
@@ -192,28 +191,34 @@ elif menu == "👷 Diário de Obra (Gestão)":
 # TELA 5: CENTRAL DE BACKUP GERAL
 elif menu == "💾 Central de Backup Geral":
     st.subheader("Central de Backup e Cópia de Segurança Completa")
-    st.markdown("Aqui você pode baixar um arquivo Excel oficial unificado contendo **todas as despesas da obra** em uma aba e **todo o histórico do Diário de Obra** em outra aba.")
+    st.markdown("Aqui você pode baixar arquivos de backup em formato universal compatível com o **Excel Online** e **Google Planilhas** sem restrições de permissão.")
     
-    # Prepara os dados para exportação dupla limpa
     df_despesas_exp = st.session_state.despesas.copy()
     df_despesas_exp["Etapa"] = df_despesas_exp["CC"].map(ETAPAS)
     df_despesas_exp["Saldo a Pagar"] = df_despesas_exp["Valor Total"] - df_despesas_exp["Valor Pago"]
     
     df_diario_exp = st.session_state.diario.copy()
     
-    # Cria arquivo Excel com múltiplas abas limpas
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_despesas_exp.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
-        df_diario_exp.to_excel(writer, index=False, sheet_name='Diario de Obra (RDO)')
-    backup_data = output.getvalue()
+    # Converte para CSV compatível com Excel Online (separador ponto e vírgula e acentuação UTF-8)
+    csv_despesas = df_despesas_exp.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    csv_diario = df_diario_exp.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     
-    st.download_button(
-        label="📥 Baixar Backup Geral da Obra (Excel com Abas)",
-        data=backup_data,
-        file_name="backup_completo_reserva_laguna.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        st.download_button(
+            label="📥 Baixar Backup: Extrato de Despesas",
+            data=csv_despesas,
+            file_name="backup_extrato_despesas.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    with col_b2:
+        st.download_button(
+            label="📥 Baixar Backup: Diário de Obra",
+            data=csv_diario,
+            file_name="backup_diario_obra.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     
-    st.info("💡 **Dica de Segurança:** Salve este arquivo no seu computador ou no Google Drive semanalmente. Ele garante que absolutamente nenhum dado da obra (nem custos, nem diário de campo) seja perdido em hipótese alguma.")
+    st.info("💡 **Dica:** Como os arquivos usam o padrão universal (`.csv` com codificação correta para o Brasil), basta abri-los diretamente no seu Excel Online ou Google Planilhas sem nenhum erro de acesso ou bloqueio de permissão.")
