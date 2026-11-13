@@ -45,10 +45,14 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa (com todas as 22 etapas originais)
+# Inicializa ou carrega os Orçamentos por Etapa (BLINDADO contra linhas fantasmas de Total)
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
-        st.session_state.orcamentos = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
+        df_orc_temp = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
+        # Remove qualquer linha fantasma de total gravada anteriormente (CC 999 ou texto "TOTAL")
+        df_orc_temp = df_orc_temp[df_orc_temp["CC"].astype(str) != "999"]
+        df_orc_temp = df_orc_temp[~df_orc_temp["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
+        st.session_state.orcamentos = df_orc_temp.reset_index(drop=True)
     else:
         orc_inicial = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
@@ -126,7 +130,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     st.markdown("---")
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
-    st.info("💡 **Dica:** Você pode ajustar os valores de Orçamento Previsto, **adicionar novas linhas** clicando no ícone de `+` no canto da tabela ou **excluir linhas** diretamente selecionando e apagando na tabela interativa abaixo.")
+    st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. Você pode adicionar novas linhas ou excluir linhas indesejadas utilizando a própria tabela interativa.")
 
     gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
     
@@ -137,7 +141,7 @@ if menu == "📊 Dashboard & Orçamento":
 
     tabela_etapas = resumo_orcamento[["CC", "Etapa", "Orçamento Previsto", "Custo Real", "Saldo do Orçamento"]].copy()
 
-    # Tabela com suporte nativo a inserção e exclusão de linhas (`num_rows="dynamic"`)
+    # Tabela com suporte nativo a edição e exclusão de linhas (`num_rows="dynamic"`)
     orc_editado = st.data_editor(
         tabela_etapas,
         num_rows="dynamic",
@@ -152,15 +156,18 @@ if menu == "📊 Dashboard & Orçamento":
         }
     )
 
-    # Salva alterações (tanto edições quanto exclusões feitas diretamente na tabela)
-    if not orc_editado.equals(tabela_etapas):
-        st.session_state.orcamentos = orc_editado[["CC", "Etapa", "Orçamento Previsto"]]
+    # Limpa e filtra qualquer tentativa de incluir linhas de Total na tabela de etapas
+    orc_limpo = orc_editado[orc_editado["CC"].astype(str) != "999"]
+    orc_limpo = orc_limpo[~orc_limpo["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
+
+    if not orc_limpo.equals(tabela_etapas):
+        st.session_state.orcamentos = orc_limpo[["CC", "Etapa", "Orçamento Previsto"]]
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
     # TOTAL GERAL COMPLETAMENTE INDEPENDENTE E ISOLADO FORA DA TABELA (APENAS LEITURA)
-    tot_previsto = orc_editado["Orçamento Previsto"].sum()
-    tot_real = orc_editado["Custo Real"].sum()
-    tot_saldo = orc_editado["Saldo do Orçamento"].sum()
+    tot_previsto = orc_limpo["Orçamento Previsto"].sum()
+    tot_real = orc_limpo["Custo Real"].sum()
+    tot_saldo = orc_limpo["Saldo do Orçamento"].sum()
 
     st.markdown("---")
     st.markdown("### 📊 Resumo Totalizador Geral da Obra (Isolado e Protegido)")
