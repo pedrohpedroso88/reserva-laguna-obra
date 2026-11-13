@@ -234,16 +234,36 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Ordenação por clique na coluna)
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Ordenação por Coluna e por Data Cronológica)
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Clique no **cabeçalho de qualquer coluna** (Fornecedor, Data, Valor Total, etc.) para ordenar as linhas instantaneamente de forma ascendente ou descendente. Edite diretamente na tabela ou remova um registro abaixo.")
-    
-    st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
+    st.info("💡 **Dica:** Clique no **cabeçalho de qualquer coluna** para ordenar, ou utilize o seletor rápido abaixo para ordenar por data cronológica, fornecedor ou forma de pagamento.")
 
-    # Utilizando st.data_editor nativo: por padrão, clicar no cabeçalho das colunas já ordena os dados no Streamlit!
+    # Opções rápidas de ordenação para garantir precisão em datas e formas de pagamento
+    col_ord1, col_ord2 = st.columns([2, 2])
+    with col_ord1:
+        criterio_ordenacao = st.selectbox("Ordenar por:", ["Padrão (Como cadastrado)", "Data (Cronológica: Antiga > Recente)", "Data (Recente > Antiga)", "Forma / Documento (NF/DOC)", "Fornecedor (A-Z)", "Valor Total (Maior > Menor)"])
+    
+    df_trabalho = st.session_state.despesas.copy()
+    
+    # Aplicação da ordenação escolhida de forma inteligente
+    if criterio_ordenacao == "Data (Cronológica: Antiga > Recente)":
+        df_trabalho["_dt_temp"] = pd.to_datetime(df_trabalho["Data"], format="%d/%m/%Y", errors="coerce")
+        df_trabalho = df_trabalho.sort_values(by="_dt_temp", ascending=True).drop(columns=["_dt_temp"])
+    elif criterio_ordenacao == "Data (Recente > Antiga)":
+        df_trabalho["_dt_temp"] = pd.to_datetime(df_trabalho["Data"], format="%d/%m/%Y", errors="coerce")
+        df_trabalho = df_trabalho.sort_values(by="_dt_temp", ascending=False).drop(columns=["_dt_temp"])
+    elif criterio_ordenacao == "Forma / Documento (NF/DOC)":
+        df_trabalho = df_trabalho.sort_values(by="NF/DOC", ascending=True)
+    elif criterio_ordenacao == "Fornecedor (A-Z)":
+        df_trabalho = df_trabalho.sort_values(by="Fornecedor", ascending=True)
+    elif criterio_ordenacao == "Valor Total (Maior > Menor)":
+        df_trabalho = df_trabalho.sort_values(by="Valor Total", ascending=False)
+
+    df_trabalho["Saldo a Pagar"] = df_trabalho["Valor Total"] - df_trabalho["Valor Pago"]
+
     df_editado = st.data_editor(
-        st.session_state.despesas,
+        df_trabalho,
         num_rows="dynamic",
         use_container_width=True,
         key="editor_despesas",
@@ -254,9 +274,11 @@ elif menu == "📋 Extrato & Edição de Notas":
         }
     )
     
-    if not df_editado.equals(st.session_state.despesas):
-        st.session_state.despesas = df_editado
-        st.session_state.despesas["Saldo a Pagar"] = st.session_state.despesas["Valor Total"] - st.session_state.despesas["Valor Pago"]
+    # Atualiza mantendo a integridade do banco de dados de despesas
+    if not df_editado.drop(columns=["Saldo a Pagar"], errors="ignore").equals(st.session_state.despesas.drop(columns=["Saldo a Pagar"], errors="ignore")):
+        st.session_state.despesas = df_editado.drop(columns=["Saldo a Pagar"], errors="ignore")
+        st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
+        st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
         st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
 
