@@ -178,10 +178,15 @@ if menu == "📊 Dashboard & Orçamento":
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
     
+    # BLINDAGEM DO PLOTLY: Converte explicitamente para float para evitar conflitos de tipos mistos
+    df_grafico = resumo_orcamento[resumo_orcamento["Custo Real"] > 0].copy()
+    df_grafico["Orçamento Previsto"] = pd.to_numeric(df_grafico["Orçamento Previsto"], errors="coerce").fillna(0.0)
+    df_grafico["Custo Real"] = pd.to_numeric(df_grafico["Custo Real"], errors="coerce").fillna(0.0)
+
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
         fig_bar = px.bar(
-            resumo_orcamento[resumo_orcamento["Custo Real"] > 0], 
+            df_grafico, 
             x="Etapa", 
             y=["Orçamento Previsto", "Custo Real"], 
             barmode="group",
@@ -193,7 +198,7 @@ if menu == "📊 Dashboard & Orçamento":
         
     with c_graf2:
         fig_pie = px.pie(
-            resumo_orcamento[resumo_orcamento["Custo Real"] > 0], 
+            df_grafico, 
             values="Custo Real", 
             names="Etapa", 
             title="Distribuição do Custo Real por Etapa", 
@@ -234,7 +239,7 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Correção de Retorno ao Padrão)
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
     st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar por data cronológica, fornecedor, forma de pagamento ou retornar ao padrão original.")
@@ -243,7 +248,6 @@ elif menu == "📋 Extrato & Edição de Notas":
     with col_ord1:
         criterio_ordenacao = st.selectbox("Ordenar por:", ["Padrão (Como cadastrado)", "Data (Cronológica: Antiga > Recente)", "Data (Recente > Antiga)", "Forma / Documento (NF/DOC)", "Fornecedor (A-Z)", "Valor Total (Maior > Menor)"])
     
-    # Cria uma cópia preservando o índice original para permitir o retorno perfeito ao padrão
     df_trabalho = st.session_state.despesas.copy().reset_index(drop=True)
     
     if criterio_ordenacao == "Padrão (Como cadastrado)":
