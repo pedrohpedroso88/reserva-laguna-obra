@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import os
 import io
+from datetime import datetime
 
 # Configuração da página
 st.set_page_config(page_title="Gestão de Obra - Reserva Laguna Lote 16 QC", layout="wide", page_icon="🏗️")
@@ -57,31 +58,33 @@ if "orcamentos" not in st.session_state:
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-# Carregamento seguro das despesas
+# Carregamento seguro das despesas (incluindo Vencimento se não existir em arquivos antigos)
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         try:
             df_temp = pd.read_csv(ARQUIVO_DADOS, sep=';')
             if "Valor Total" not in df_temp.columns or "Valor Pago" not in df_temp.columns:
                 raise ValueError("Colunas ausentes")
+            if "Vencimento" not in df_temp.columns:
+                df_temp["Vencimento"] = df_temp["Data"] # Fallback para dados antigos
             st.session_state.despesas = df_temp
         except:
             os.remove(ARQUIVO_DADOS)
             st.rerun()
     else:
         dados_iniciais = [
-            {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "21/10/2025", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "13/11/2025", "Descrição": "Projeto arquitetônico - 1ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Associação de moradores Reserva Laguna", "NF/DOC": "PIX", "Data": "03/12/2025", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 1400.00, "Valor Pago": 1400.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Bate & Sonda", "NF/DOC": "PIX", "Data": "02/02/2026", "Descrição": "Sondagem", "CC": 2, "Valor Total": 1600.00, "Valor Pago": 1600.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "WM Engenharia e Consultorias Ltda (DWT)", "NF/DOC": "20/27/30/08", "Data": "02/03/2026", "Descrição": "Projetos estrutural, hidráulico e elétrico", "CC": 0, "Valor Total": 12300.00, "Valor Pago": 12300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "09/03/2026", "Descrição": "Projeto arquitetônico - 2ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "3332403332", "Data": "12/03/2026", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 491.71, "Valor Pago": 491.71, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "PIX", "Data": "08/06/2026", "Descrição": "Taxa de análise de projeto terraplanagem", "CC": 19, "Valor Total": 250.74, "Valor Pago": 250.74, "Observações": "Pago por Marco Flávio - Reembolsado"},
-            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "18/08/2026", "Descrição": "Taxa de movimentação complementar de terra", "CC": 19, "Valor Total": 25.35, "Valor Pago": 25.35, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Lais Bertini", "NF/DOC": "PIX", "Data": "26/08/2026", "Descrição": "Documentação ambiental - Aterro", "CC": 19, "Valor Total": 1774.73, "Valor Pago": 1774.73, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "10/09/2026", "Descrição": "Taxa de alvará de construção", "CC": 19, "Valor Total": 570.40, "Valor Pago": 570.40, "Observações": "Pago por Sônia dos Santos Carvalho"},
-            {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "15/09/2026", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
+            {"Fornecedor": "Diogo A Silva Dias", "NF/DOC": "PIX", "Data": "21/10/2025", "Vencimento": "21/10/2025", "Descrição": "Levantamento planialtimétrico", "CC": 2, "Valor Total": 1300.00, "Valor Pago": 1300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "13/11/2025", "Vencimento": "13/11/2025", "Descrição": "Projeto arquitetônico - 1ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Associação de moradores Reserva Laguna", "NF/DOC": "PIX", "Data": "03/12/2025", "Vencimento": "03/12/2025", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 1400.00, "Valor Pago": 1400.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Bate & Sonda", "NF/DOC": "PIX", "Data": "02/02/2026", "Vencimento": "02/02/2026", "Descrição": "Sondagem", "CC": 2, "Valor Total": 1600.00, "Valor Pago": 1600.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "WM Engenharia e Consultorias Ltda (DWT)", "NF/DOC": "20/27/30/08", "Data": "02/03/2026", "Vencimento": "02/03/2026", "Descrição": "Projetos estrutural, hidráulico e elétrico", "CC": 0, "Valor Total": 12300.00, "Valor Pago": 12300.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Marco Flávio de Magalhães Matos", "NF/DOC": "PIX", "Data": "09/03/2026", "Vencimento": "09/03/2026", "Descrição": "Projeto arquitetônico - 2ª parcela", "CC": 0, "Valor Total": 12000.00, "Valor Pago": 12000.00, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "3332403332", "Data": "12/03/2026", "Vencimento": "12/03/2026", "Descrição": "Taxa de análise de projeto residencial", "CC": 19, "Valor Total": 491.71, "Valor Pago": 491.71, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "PIX", "Data": "08/06/2026", "Vencimento": "08/06/2026", "Descrição": "Taxa de análise de projeto terraplanagem", "CC": 19, "Valor Total": 250.74, "Valor Pago": 250.74, "Observações": "Pago por Marco Flávio - Reembolsado"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "18/08/2026", "Vencimento": "18/08/2026", "Descrição": "Taxa de movimentação complementar de terra", "CC": 19, "Valor Total": 25.35, "Valor Pago": 25.35, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Lais Bertini", "NF/DOC": "PIX", "Data": "26/08/2026", "Vencimento": "26/08/2026", "Descrição": "Documentação ambiental - Aterro", "CC": 19, "Valor Total": 1774.73, "Valor Pago": 1774.73, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "10/09/2026", "Vencimento": "10/09/2026", "Descrição": "Taxa de alvará de construção", "CC": 19, "Valor Total": 570.40, "Valor Pago": 570.40, "Observações": "Pago por Sônia dos Santos Carvalho"},
+            {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "15/09/2026", "Vencimento": "15/09/2026", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
         ]
         st.session_state.despesas = pd.DataFrame(dados_iniciais)
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
@@ -178,7 +181,6 @@ if menu == "📊 Dashboard & Orçamento":
     st.markdown("---")
     st.subheader("📈 Gráficos Comparativos de Custos")
     
-    # BLINDAGEM DO PLOTLY: Converte explicitamente para float para evitar conflitos de tipos mistos
     df_grafico = resumo_orcamento[resumo_orcamento["Custo Real"] > 0].copy()
     df_grafico["Orçamento Previsto"] = pd.to_numeric(df_grafico["Orçamento Previsto"], errors="coerce").fillna(0.0)
     df_grafico["Custo Real"] = pd.to_numeric(df_grafico["Custo Real"], errors="coerce").fillna(0.0)
@@ -207,7 +209,7 @@ if menu == "📊 Dashboard & Orçamento":
         fig_pie.update_layout(margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_pie, use_container_width=True)
 
-# TELA 2: LANÇAR DESPESA
+# TELA 2: LANÇAR DESPESA (Com Data no formato brasileiro e Data de Vencimento)
 elif menu == "➕ Lançar Nova Despesa":
     st.subheader("Novo Lançamento de Despesa / Nota Fiscal")
     with st.form("form_despesa", clear_on_submit=True):
@@ -215,23 +217,27 @@ elif menu == "➕ Lançar Nova Despesa":
         fornecedor = col1.text_input("Fornecedor *")
         nf_doc = col2.selectbox("Forma / Documento *", ["PIX", "Boleto", "Nota Fiscal", "Transferência", "Dinheiro"])
         
-        col3, col4 = st.columns(2)
-        data_input = col3.date_input("Data da Despesa")
+        col3, col4, col5 = st.columns(3)
+        data_input = col3.date_input("Data da Despesa (DD/MM/AAAA)")
         data_str = data_input.strftime("%d/%m/%Y")
-        cc_selecionado = col4.selectbox("Centro de Custo / Etapa *", options=list(ETAPAS.keys()), format_func=lambda x: ETAPAS[x])
+        
+        venc_input = col4.date_input("Data de Vencimento (DD/MM/AAAA)")
+        venc_str = venc_input.strftime("%d/%m/%Y")
+        
+        cc_selecionado = col5.selectbox("Centro de Custo / Etapa *", options=list(ETAPAS.keys()), format_func=lambda x: ETAPAS[x])
         
         descricao = st.text_input("Descrição da Despesa *")
         
-        col5, col6 = st.columns(2)
-        valor_total = col5.number_input("Valor Total (R$) *", min_value=0.0, step=50.0)
-        valor_pago = col6.number_input("Valor Já Pago (R$)", min_value=0.0, step=50.0)
+        col6, col7 = st.columns(2)
+        valor_total = col6.number_input("Valor Total (R$) *", min_value=0.0, step=50.0)
+        valor_pago = col7.number_input("Valor Já Pago (R$)", min_value=0.0, step=50.0)
         
         obs = st.text_input("Observações (Ex: Pago por..., parcelamento, etc.)")
         
         enviado = st.form_submit_button("✅ Salvar Lançamento")
         if enviado and fornecedor and valor_total > 0:
             novo = pd.DataFrame([{
-                "Fornecedor": fornecedor, "NF/DOC": nf_doc, "Data": data_str,
+                "Fornecedor": fornecedor, "NF/DOC": nf_doc, "Data": data_str, "Vencimento": venc_str,
                 "Descrição": descricao, "CC": cc_selecionado, "Valor Total": valor_total,
                 "Valor Pago": valor_pago, "Observações": obs
             }])
@@ -239,14 +245,22 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Linha de Totais no Rodapé)
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
-    st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar por data cronológica, fornecedor, forma de pagamento ou retornar ao padrão original.")
+    st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar por data, vencimento, fornecedor ou forma de pagamento. O rodapé exibe o somatório total.")
 
     col_ord1, col_ord2 = st.columns([2, 2])
     with col_ord1:
-        criterio_ordenacao = st.selectbox("Ordenar por:", ["Padrão (Como cadastrado)", "Data (Cronológica: Antiga > Recente)", "Data (Recente > Antiga)", "Forma / Documento (NF/DOC)", "Fornecedor (A-Z)", "Valor Total (Maior > Menor)"])
+        criterio_ordenacao = st.selectbox("Ordenar por:", [
+            "Padrão (Como cadastrado)", 
+            "Data (Cronológica: Antiga > Recente)", 
+            "Data (Recente > Antiga)", 
+            "Vencimento (Mais próximo > Distante)", 
+            "Forma / Documento (NF/DOC)", 
+            "Fornecedor (A-Z)", 
+            "Valor Total (Maior > Menor)"
+        ])
     
     df_trabalho = st.session_state.despesas.copy().reset_index(drop=True)
     
@@ -258,6 +272,9 @@ elif menu == "📋 Extrato & Edição de Notas":
     elif criterio_ordenacao == "Data (Recente > Antiga)":
         df_trabalho["_dt_temp"] = pd.to_datetime(df_trabalho["Data"], format="%d/%m/%Y", errors="coerce")
         df_trabalho = df_trabalho.sort_values(by="_dt_temp", ascending=False).drop(columns=["_dt_temp"])
+    elif criterio_ordenacao == "Vencimento (Mais próximo > Distante)":
+        df_trabalho["_venc_temp"] = pd.to_datetime(df_trabalho["Vencimento"], format="%d/%m/%Y", errors="coerce")
+        df_trabalho = df_trabalho.sort_values(by="_venc_temp", ascending=True).drop(columns=["_venc_temp"])
     elif criterio_ordenacao == "Forma / Documento (NF/DOC)":
         df_trabalho = df_trabalho.sort_values(by="NF/DOC", ascending=True)
     elif criterio_ordenacao == "Fornecedor (A-Z)":
@@ -267,20 +284,45 @@ elif menu == "📋 Extrato & Edição de Notas":
 
     df_trabalho["Saldo a Pagar"] = df_trabalho["Valor Total"] - df_trabalho["Valor Pago"]
 
+    # Calcula os totais das despesas reais para o rodapé
+    tot_val_total = df_trabalho["Valor Total"].sum()
+    tot_val_pago = df_trabalho["Valor Pago"].sum()
+    tot_saldo_pagar = df_trabalho["Saldo a Pagar"].sum()
+
+    linha_total_despesas = pd.DataFrame([{
+        "Fornecedor": "📌 TOTAL GERAL",
+        "NF/DOC": "-",
+        "Data": "-",
+        "Vencimento": "-",
+        "Descrição": "-",
+        "CC": 999,
+        "Valor Total": tot_val_total,
+        "Valor Pago": tot_val_pago,
+        "Saldo a Pagar": tot_saldo_pagar,
+        "Observações": "-"
+    }])
+
+    df_com_total_despesas = pd.concat([df_trabalho, linha_total_despesas], ignore_index=True)
+
     df_editado = st.data_editor(
-        df_trabalho,
+        df_com_total_despesas,
         num_rows="dynamic",
         use_container_width=True,
         key="editor_despesas",
         column_config={
             "Valor Total": st.column_config.NumberColumn("Valor Total (R$)", format="R$ %.2f"),
             "Valor Pago": st.column_config.NumberColumn("Valor Pago (R$)", format="R$ %.2f"),
-            "Saldo a Pagar": st.column_config.NumberColumn("Saldo a Pagar (R$)", format="R$ %.2f")
+            "Saldo a Pagar": st.column_config.NumberColumn("Saldo a Pagar (R$)", format="R$ %.2f", disabled=True),
+            "CC": st.column_config.NumberColumn("CC")
         }
     )
     
-    if not df_editado.drop(columns=["Saldo a Pagar"], errors="ignore").equals(st.session_state.despesas.drop(columns=["Saldo a Pagar"], errors="ignore")):
-        st.session_state.despesas = df_editado.drop(columns=["Saldo a Pagar"], errors="ignore")
+    # Filtra removendo a linha de total antes de salvar no arquivo de dados
+    df_limpo_despesas = df_editado[df_editado["CC"].astype(str) != "999"]
+    df_limpo_despesas = df_limpo_despesas[df_limpo_despesas["Fornecedor"].astype(str) != "📌 TOTAL GERAL"]
+
+    if not df_limpo_despesas.drop(columns=["Saldo a Pagar"], errors="ignore").equals(st.session_state.despesas.drop(columns=["Saldo a Pagar"], errors="ignore")):
+        st.session_state.despesas = df_limpo_despesas.drop(columns=["Saldo a Pagar"], errors="ignore")
         st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
         st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
