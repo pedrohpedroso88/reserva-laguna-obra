@@ -49,38 +49,46 @@ def fmt_brl(valor):
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa
+# Inicializa ou restaura rigorosamente os Orçamentos por Etapa para o padrão oficial
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
-        df_orc_temp = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
-        df_orc_temp = df_orc_temp[df_orc_temp["CC"].astype(str) != "999"]
-        df_orc_temp = df_orc_temp[~df_orc_temp["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
-        
-        etapas_existentes = df_orc_temp["CC"].tolist()
-        faltando = [k for k in ETAPAS.keys() if k not in etapas_existentes]
-        if faltando:
-            novas_faltando = pd.DataFrame([{"CC": k, "Etapa": ETAPAS[k], "Orçamento Previsto": 5000.00} for k in faltando])
-            df_orc_temp = pd.concat([df_orc_temp, novas_faltando], ignore_index=True)
-            df_orc_temp = df_orc_temp.sort_values("CC").reset_index(drop=True)
-        
-        st.session_state.orcamentos = df_orc_temp
+        try:
+            df_orc_temp = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
+            df_orc_temp = df_orc_temp[df_orc_temp["CC"].astype(str) != "999"]
+            df_orc_temp = df_orc_temp[~df_orc_temp["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
+            
+            # Restaura o dicionário padrão exato para garantir que a etapa 0 e todas as outras fiquem corretas
+            orc_padrao = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
+            df_padrao = pd.DataFrame(orc_padrao)
+            
+            # Atualiza os valores previstos que já estavam salvos
+            for idx, row in df_padrao.iterrows():
+                cc_val = row["CC"]
+                match = df_orc_temp[df_orc_temp["CC"] == cc_val]
+                if not match.empty:
+                    df_padrao.loc[idx, "Orçamento Previsto"] = match.iloc[0]["Orçamento Previsto"]
+            
+            st.session_state.orcamentos = df_padrao
+        except:
+            orc_inicial = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
+            st.session_state.orcamentos = pd.DataFrame(orc_inicial)
+            st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
     else:
         orc_inicial = [{"CC": k, "Etapa": v, "Orçamento Previsto": 15000.00 if k in [0,3,4,8] else 5000.00} for k, v in ETAPAS.items()]
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-# Carregamento seguro das despesas com blindagem de colunas
+# Carregamento seguro das despesas com blindagem rigorosa de colunas
+colunas_desejadas = ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "CC", "Valor Total", "Valor Pago", "Observações"]
+
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         try:
             df_temp = pd.read_csv(ARQUIVO_DADOS, sep=';')
-            if "Valor Total" not in df_temp.columns or "Valor Pago" not in df_temp.columns:
-                raise ValueError("Colunas ausentes")
-            if "Vencimento" not in df_temp.columns:
-                df_temp["Vencimento"] = df_temp["Data"]
-            if "Observações" not in df_temp.columns:
-                df_temp["Observações"] = ""
-            st.session_state.despesas = df_temp
+            for col in colunas_desejadas:
+                if col not in df_temp.columns:
+                    df_temp[col] = "" if col != "CC" else 0
+            st.session_state.despesas = df_temp[colunas_desejadas]
         except:
             os.remove(ARQUIVO_DADOS)
             st.rerun()
@@ -99,7 +107,7 @@ if "despesas" not in st.session_state:
             {"Fornecedor": "Prefeitura Municipal de Nova Lima", "NF/DOC": "Boleto", "Data": "10/09/2026", "Vencimento": "10/09/2026", "Descrição": "Taxa de alvará de construção", "CC": 19, "Valor Total": 570.40, "Valor Pago": 570.40, "Observações": "Pago por Sônia dos Santos Carvalho"},
             {"Fornecedor": "Lançamento Pendente (Exemplo)", "NF/DOC": "S/N", "Data": "15/09/2026", "Vencimento": "15/09/2026", "Descrição": "Despesa em aberto na planilha", "CC": 0, "Valor Total": 100.00, "Valor Pago": 0.00, "Observações": "Aguardando pagamento"}
         ]
-        st.session_state.despesas = pd.DataFrame(dados_iniciais)
+        st.session_state.despesas = pd.DataFrame(dados_iniciais)[colunas_desejadas]
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
 
 if "diario" not in st.session_state:
@@ -125,9 +133,9 @@ menu = st.sidebar.radio("Navegação do Sistema", [
 ])
 
 # Garante conversão rigorosa das colunas de despesas
-for col_nec in ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "Observações"]:
+for col_nec in colunas_desejadas:
     if col_nec not in st.session_state.despesas.columns:
-        st.session_state.despesas[col_nec] = ""
+        st.session_state.despesas[col_nec] = "" if col_nec != "CC" else 0
 
 st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
 st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
@@ -271,7 +279,7 @@ elif menu == "➕ Lançar Nova Despesa":
                 "Descrição": descricao, "CC": cc_selecionado, "Valor Total": valor_total,
                 "Valor Pago": valor_pago, "Observações": obs
             }])
-            st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
+            st.session_state.despesas = pd.concat([st.session_state.despesas[colunas_desejadas], novo[colunas_desejadas]], ignore_index=True)
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e atualizada no Dashboard com sucesso!")
             st.rerun()
@@ -293,7 +301,7 @@ elif menu == "📋 Extrato & Edição de Notas":
             "Valor Total (Maior > Menor)"
         ])
     
-    df_trabalho = st.session_state.despesas.copy().reset_index(drop=True)
+    df_trabalho = st.session_state.despesas[colunas_desejadas].copy().reset_index(drop=True)
     
     if criterio_ordenacao == "Padrão (Como cadastrado)":
         df_trabalho = df_trabalho.sort_index()
@@ -315,14 +323,13 @@ elif menu == "📋 Extrato & Edição de Notas":
 
     df_trabalho["Saldo a Pagar"] = df_trabalho["Valor Total"] - df_trabalho["Valor Pago"]
 
-    # Ordem rigorosa das colunas solicitada pelo gestor
-    colunas_desejadas = ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "CC", "Valor Total", "Valor Pago", "Saldo a Pagar", "Observações"]
-    for col in colunas_desejadas:
+    # Ordem rigorosa das colunas: Saldo a pagar após Valor pago, Observações por último
+    colunas_exibicao = ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "CC", "Valor Total", "Valor Pago", "Saldo a Pagar", "Observações"]
+    for col in colunas_exibicao:
         if col not in df_trabalho.columns:
-            df_trabalho[col] = "-"
-    df_trabalho = df_trabalho[colunas_desejadas]
+            df_trabalho[col] = "-" if col != "Saldo a Pagar" else 0.0
+    df_trabalho = df_trabalho[colunas_exibicao]
 
-    # Totais para o rodapé
     tot_val_total = df_trabalho["Valor Total"].sum()
     tot_val_pago = df_trabalho["Valor Pago"].sum()
     tot_saldo_pagar = df_trabalho["Saldo a Pagar"].sum()
@@ -338,7 +345,7 @@ elif menu == "📋 Extrato & Edição de Notas":
         "Valor Pago": tot_val_pago,
         "Saldo a Pagar": tot_saldo_pagar,
         "Observações": "-"
-    }])[colunas_desejadas]
+    }])[colunas_exibicao]
 
     df_com_total_despesas = pd.concat([df_trabalho, linha_total_despesas], ignore_index=True)
 
@@ -358,8 +365,8 @@ elif menu == "📋 Extrato & Edição de Notas":
     df_limpo_despesas = df_editado[df_editado["CC"].astype(str) != "999"]
     df_limpo_despesas = df_limpo_despesas[df_limpo_despesas["Fornecedor"].astype(str) != "📌 TOTAL GERAL"]
 
-    base_atual = st.session_state.despesas[colunas_desejadas[:-1]].copy()
-    base_editada = df_limpo_despesas[colunas_desejadas[:-1]].copy()
+    base_atual = st.session_state.despesas[colunas_desejadas].copy()
+    base_editada = df_limpo_despesas[colunas_desejadas].copy()
 
     if not base_editada.equals(base_atual):
         st.session_state.despesas = base_editada
