@@ -58,7 +58,7 @@ if "orcamentos" not in st.session_state:
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-# Carregamento seguro das despesas (incluindo Vencimento se não existir em arquivos antigos)
+# Carregamento seguro das despesas
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         try:
@@ -66,7 +66,7 @@ if "despesas" not in st.session_state:
             if "Valor Total" not in df_temp.columns or "Valor Pago" not in df_temp.columns:
                 raise ValueError("Colunas ausentes")
             if "Vencimento" not in df_temp.columns:
-                df_temp["Vencimento"] = df_temp["Data"] # Fallback para dados antigos
+                df_temp["Vencimento"] = df_temp["Data"]
             st.session_state.despesas = df_temp
         except:
             os.remove(ARQUIVO_DADOS)
@@ -111,8 +111,10 @@ menu = st.sidebar.radio("Navegação do Sistema", [
     "💾 Central de Backup Geral"
 ])
 
+# Garante conversão segura e evita tipos mistos nas despesas
 st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
 st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
+st.session_state.despesas["CC"] = pd.to_numeric(st.session_state.despesas["CC"], errors="coerce").fillna(0).astype(int)
 
 df = st.session_state.despesas.copy()
 df["Saldo a Pagar"] = df["Valor Total"] - df["Valor Pago"]
@@ -134,8 +136,14 @@ if menu == "📊 Dashboard & Orçamento":
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
     st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. O **Total Geral da Obra** encontra-se fixo na última linha da tabela para visualização imediata.")
 
-    gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
+    # BLINDAGEM DO MERGE: Garante que o CC seja numérico em ambos os DataFrames antes de juntar
+    st.session_state.orcamentos["CC"] = pd.to_numeric(st.session_state.orcamentos["CC"], errors="coerce").fillna(0).astype(int)
     
+    if len(df) > 0:
+        gastos_reais = df.groupby("CC")[["Valor Total", "Valor Pago", "Saldo a Pagar"]].sum().reset_index()
+    else:
+        gastos_reais = pd.DataFrame(columns=["CC", "Valor Total", "Valor Pago", "Saldo a Pagar"])
+
     orc_df = st.session_state.orcamentos.copy()
     resumo_orcamento = pd.merge(orc_df, gastos_reais, on="CC", how="left").fillna(0.0)
     resumo_orcamento.rename(columns={"Valor Total": "Custo Real"}, inplace=True)
@@ -187,29 +195,35 @@ if menu == "📊 Dashboard & Orçamento":
 
     c_graf1, c_graf2 = st.columns(2)
     with c_graf1:
-        fig_bar = px.bar(
-            df_grafico, 
-            x="Etapa", 
-            y=["Orçamento Previsto", "Custo Real"], 
-            barmode="group",
-            title="Comparativo: Orçamento vs. Custo Real",
-            labels={"value": "Valor (R$)", "variable": "Métrica"}
-        )
-        fig_bar.update_layout(xaxis_tickangle=-45, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_bar, use_container_width=True)
+        if not df_grafico.empty:
+            fig_bar = px.bar(
+                df_grafico, 
+                x="Etapa", 
+                y=["Orçamento Previsto", "Custo Real"], 
+                barmode="group",
+                title="Comparativo: Orçamento vs. Custo Real",
+                labels={"value": "Valor (R$)", "variable": "Métrica"}
+            )
+            fig_bar.update_layout(xaxis_tickangle=-45, margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_bar, use_container_width=True)
+        else:
+            st.info("Nenhum custo real lançado para exibir no gráfico de barras.")
         
     with c_graf2:
-        fig_pie = px.pie(
-            df_grafico, 
-            values="Custo Real", 
-            names="Etapa", 
-            title="Distribuição do Custo Real por Etapa", 
-            hole=0.4
-        )
-        fig_pie.update_layout(margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_pie, use_container_width=True)
+        if not df_grafico.empty:
+            fig_pie = px.pie(
+                df_grafico, 
+                values="Custo Real", 
+                names="Etapa", 
+                title="Distribuição do Custo Real por Etapa", 
+                hole=0.4
+            )
+            fig_pie.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Nenhum custo real lançado para exibir no gráfico de pizza.")
 
-# TELA 2: LANÇAR DESPESA (Com Data no formato brasileiro e Data de Vencimento)
+# TELA 2: LANÇAR DESPESA
 elif menu == "➕ Lançar Nova Despesa":
     st.subheader("Novo Lançamento de Despesa / Nota Fiscal")
     with st.form("form_despesa", clear_on_submit=True):
@@ -245,7 +259,7 @@ elif menu == "➕ Lançar Nova Despesa":
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
             st.success("Despesa registrada e salva com sucesso na nuvem!")
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Com Linha de Totais no Rodapé)
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
     st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar por data, vencimento, fornecedor ou forma de pagamento. O rodapé exibe o somatório total.")
@@ -284,7 +298,6 @@ elif menu == "📋 Extrato & Edição de Notas":
 
     df_trabalho["Saldo a Pagar"] = df_trabalho["Valor Total"] - df_trabalho["Valor Pago"]
 
-    # Calcula os totais das despesas reais para o rodapé
     tot_val_total = df_trabalho["Valor Total"].sum()
     tot_val_pago = df_trabalho["Valor Pago"].sum()
     tot_saldo_pagar = df_trabalho["Saldo a Pagar"].sum()
@@ -317,7 +330,6 @@ elif menu == "📋 Extrato & Edição de Notas":
         }
     )
     
-    # Filtra removendo a linha de total antes de salvar no arquivo de dados
     df_limpo_despesas = df_editado[df_editado["CC"].astype(str) != "999"]
     df_limpo_despesas = df_limpo_despesas[df_limpo_despesas["Fornecedor"].astype(str) != "📌 TOTAL GERAL"]
 
