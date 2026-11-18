@@ -42,18 +42,20 @@ ARQUIVO_ORCAMENTO = "orcamento_etapas.csv"
 
 def fmt_brl(valor):
     try:
-        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        val_float = float(valor)
+        if val_float == 0:
+            return "R$ 0,00"
+        return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return f"R$ {valor}"
 
-# Inicializa ou carrega os Orçamentos por Etapa (garantindo todas as 22 etapas padrão)
+# Inicializa ou carrega os Orçamentos por Etapa
 if "orcamentos" not in st.session_state:
     if os.path.exists(ARQUIVO_ORCAMENTO):
         df_orc_temp = pd.read_csv(ARQUIVO_ORCAMENTO, sep=';')
         df_orc_temp = df_orc_temp[df_orc_temp["CC"].astype(str) != "999"]
         df_orc_temp = df_orc_temp[~df_orc_temp["Etapa"].astype(str).str.contains("TOTAL", case=False, na=False)]
         
-        # Garante que todas as etapas de 0 a 21 existam
         etapas_existentes = df_orc_temp["CC"].tolist()
         faltando = [k for k in ETAPAS.keys() if k not in etapas_existentes]
         if faltando:
@@ -67,7 +69,7 @@ if "orcamentos" not in st.session_state:
         st.session_state.orcamentos = pd.DataFrame(orc_inicial)
         st.session_state.orcamentos.to_csv(ARQUIVO_ORCAMENTO, index=False, sep=';', encoding='utf-8-sig')
 
-# Carregamento seguro das despesas
+# Carregamento seguro das despesas com blindagem de colunas
 if "despesas" not in st.session_state:
     if os.path.exists(ARQUIVO_DADOS):
         try:
@@ -76,6 +78,8 @@ if "despesas" not in st.session_state:
                 raise ValueError("Colunas ausentes")
             if "Vencimento" not in df_temp.columns:
                 df_temp["Vencimento"] = df_temp["Data"]
+            if "Observações" not in df_temp.columns:
+                df_temp["Observações"] = ""
             st.session_state.despesas = df_temp
         except:
             os.remove(ARQUIVO_DADOS)
@@ -120,7 +124,11 @@ menu = st.sidebar.radio("Navegação do Sistema", [
     "💾 Central de Backup Geral"
 ])
 
-# Sincronização rigorosa dos tipos de dados de despesas
+# Garante conversão rigorosa das colunas de despesas
+for col_nec in ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "Observações"]:
+    if col_nec not in st.session_state.despesas.columns:
+        st.session_state.despesas[col_nec] = ""
+
 st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
 st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
 st.session_state.despesas["CC"] = pd.to_numeric(st.session_state.despesas["CC"], errors="coerce").fillna(0).astype(int)
@@ -268,7 +276,7 @@ elif menu == "➕ Lançar Nova Despesa":
             st.success("Despesa registrada e atualizada no Dashboard com sucesso!")
             st.rerun()
 
-# TELA 3: EXTRATO & EDIÇÃO DE NOTAS (Ordem rigorosa: Saldo a pagar após Valor pago, Observações no final, e Download funcional)
+# TELA 3: EXTRATO & EDIÇÃO DE NOTAS
 elif menu == "📋 Extrato & Edição de Notas":
     st.subheader("Controle, Edição e Exclusão de Lançamentos")
     st.info("💡 **Dica:** Utilize o seletor abaixo para ordenar as despesas. O rodapé exibe o somatório total das colunas.")
@@ -307,25 +315,12 @@ elif menu == "📋 Extrato & Edição de Notas":
 
     df_trabalho["Saldo a Pagar"] = df_trabalho["Valor Total"] - df_trabalho["Valor Pago"]
 
-    # REAGRUPAMENTO RIGOROSO DAS COLUNAS CONFORME PEDIDO DO GESTOR (Observações por último, Saldo a pagar após Valor pago)
+    # Ordem rigorosa das colunas solicitada pelo gestor
     colunas_desejadas = ["Fornecedor", "NF/DOC", "Data", "Vencimento", "Descrição", "CC", "Valor Total", "Valor Pago", "Saldo a Pagar", "Observações"]
     for col in colunas_desejadas:
         if col not in df_trabalho.columns:
             df_trabalho[col] = "-"
     df_trabalho = df_trabalho[colunas_desejadas]
-
-    # Botão de Download Direto da Tabela de Despesas Funcional
-    output_extrato = io.BytesIO()
-    with pd.ExcelWriter(output_extrato, engine='openpyxl') as writer:
-        df_trabalho.to_excel(writer, index=False, sheet_name='Extrato de Despesas')
-    excel_data_extrato = output_extrato.getvalue()
-
-    st.download_button(
-        label="📥 Baixar Planilha de Extrato Atualizada (.xlsx)",
-        data=excel_data_extrato,
-        file_name="extrato_despesas_reserva_laguna.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
 
     # Totais para o rodapé
     tot_val_total = df_trabalho["Valor Total"].sum()
@@ -363,8 +358,11 @@ elif menu == "📋 Extrato & Edição de Notas":
     df_limpo_despesas = df_editado[df_editado["CC"].astype(str) != "999"]
     df_limpo_despesas = df_limpo_despesas[df_limpo_despesas["Fornecedor"].astype(str) != "📌 TOTAL GERAL"]
 
-    if not df_limpo_despesas.drop(columns=["Saldo a Pagar"], errors="ignore").equals(st.session_state.despesas[colunas_desejadas[:-1]].drop(columns=["Saldo a Pagar"], errors="ignore")):
-        st.session_state.despesas = df_limpo_despesas[colunas_desejadas[:-1]].copy()
+    base_atual = st.session_state.despesas[colunas_desejadas[:-1]].copy()
+    base_editada = df_limpo_despesas[colunas_desejadas[:-1]].copy()
+
+    if not base_editada.equals(base_atual):
+        st.session_state.despesas = base_editada
         st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
         st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
