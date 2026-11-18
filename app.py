@@ -111,7 +111,7 @@ menu = st.sidebar.radio("Navegação do Sistema", [
     "💾 Central de Backup Geral"
 ])
 
-# Garante conversão segura e evita tipos mistos nas despesas
+# Sincronização e conversão rigorosa dos dados de despesas
 st.session_state.despesas["Valor Total"] = pd.to_numeric(st.session_state.despesas["Valor Total"], errors="coerce").fillna(0.0)
 st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
 st.session_state.despesas["CC"] = pd.to_numeric(st.session_state.despesas["CC"], errors="coerce").fillna(0).astype(int)
@@ -136,7 +136,6 @@ if menu == "📊 Dashboard & Orçamento":
     st.subheader("💰 Controle de Orçamento por Etapa (Previsto vs. Custo Real)")
     st.info("💡 **Dica:** Ajuste o Orçamento Previsto diretamente na tabela. O **Total Geral da Obra** encontra-se fixo na última linha da tabela para visualização imediata.")
 
-    # BLINDAGEM DO MERGE: Garante que o CC seja numérico em ambos os DataFrames antes de juntar
     st.session_state.orcamentos["CC"] = pd.to_numeric(st.session_state.orcamentos["CC"], errors="coerce").fillna(0).astype(int)
     
     if len(df) > 0:
@@ -255,9 +254,11 @@ elif menu == "➕ Lançar Nova Despesa":
                 "Descrição": descricao, "CC": cc_selecionado, "Valor Total": valor_total,
                 "Valor Pago": valor_pago, "Observações": obs
             }])
+            # Concatena e atualiza imediatamente o session_state para sincronizar com o Dashboard
             st.session_state.despesas = pd.concat([st.session_state.despesas, novo], ignore_index=True)
             st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
-            st.success("Despesa registrada e salva com sucesso na nuvem!")
+            st.success("Despesa registrada e atualizada no Dashboard com sucesso!")
+            st.rerun()
 
 # TELA 3: EXTRATO & EDIÇÃO DE NOTAS
 elif menu == "📋 Extrato & Edição de Notas":
@@ -339,6 +340,7 @@ elif menu == "📋 Extrato & Edição de Notas":
         st.session_state.despesas["Valor Pago"] = pd.to_numeric(st.session_state.despesas["Valor Pago"], errors="coerce").fillna(0.0)
         st.session_state.despesas.to_csv(ARQUIVO_DADOS, index=False, sep=';', encoding='utf-8-sig')
         st.success("💾 Alterações salvas automaticamente na nuvem com sucesso!")
+        st.rerun()
 
     st.markdown("---")
     st.subheader("🗑️ Excluir Lançamento Específico")
